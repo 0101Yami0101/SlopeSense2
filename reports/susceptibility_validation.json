@@ -1,0 +1,73 @@
+{
+  "domain_cells": 7030010,
+  "scored": 7030010,
+  "class_cuts_percentile": [
+    50,
+    75,
+    90,
+    97
+  ],
+  "class_cuts_value": [
+    0.04714040458202362,
+    0.15410089120268822,
+    0.39249152243137375,
+    0.7023723852634426
+  ],
+  "success_rate": [
+    {
+      "cls": 1,
+      "name": "Very Low",
+      "area_frac": 0.5,
+      "slide_frac": 0.010638883688146345,
+      "lift": 0.02127776737629269
+    },
+    {
+      "cls": 2,
+      "name": "Low",
+      "area_frac": 0.24999992887634584,
+      "slide_frac": 0.0724787717926409,
+      "lift": 0.28991516964986863
+    },
+    {
+      "cls": 3,
+      "name": "Moderate",
+      "area_frac": 0.15000007112365416,
+      "slide_frac": 0.20635689820372471,
+      "lift": 1.375712002387067
+    },
+    {
+      "cls": 4,
+      "name": "High",
+      "area_frac": 0.06999990042688417,
+      "slide_frac": 0.3076685866584434,
+      "lift": 4.395271775847843
+    },
+    {
+      "cls": 5,
+      "name": "Very High",
+      "area_frac": 0.030000099573115828,
+      "slide_frac": 0.4028568596570447,
+      "lift": 13.428517417924148
+    }
+  ],
+  "independent_points": {
+    "gsi-nlfc_landslides_point_arunachal.geojson": {
+      "points_in_domain": 1027,
+      "frac_high_or_veryhigh": 0.7137293086660176,
+      "kind": "recall check",
+      "caveat": "NOT independent \u2014 84.6% on training polygons",
+      "lift_vs_random": 7.137293086660176,
+      "median_score": 0.591281533241272
+    },
+    "nasa-glc_landslides_point_arunachal.geojson": {
+      "points_in_domain": 56,
+      "frac_high_or_veryhigh": 0.2857142857142857,
+      "kind": "INDEPENDENT",
+      "caveat": "1.4% overlap; coarse geolocation attenuates",
+      "lift_vs_random": 2.8571428571428568,
+      "median_score": 0.15576645731925964
+    }
+  },
+  "oof_auc": 0.859522151648006,
+  "score_meaning": "relative susceptibility index, NOT event probability"
+}

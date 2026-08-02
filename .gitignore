@@ -1,0 +1,44 @@
+# Credentials — never commit.
+# Patterns are deliberately broad: the original list named one exact path
+# (docs/data_research/PlatformPasswords.txt) while the real file lives in
+# misc/, so it would have been committed. Match by NAME anywhere, not by path.
+.env
+*.env
+!.env.example
+**/PlatformPasswords.txt
+**/*[Pp]assword*
+**/*[Ss]ecret*
+**/*credential*
+.netrc
+_netrc
+misc/
+
+# Data — 4+ GB, regenerable via scripts/fetch/
+data/raw/
+data/interim/
+data/processed/
+
+# Environment
+.venv/
+__pycache__/
+*.pyc
+
+# Generated reports
+logs/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Viz build scratch
+viz/_s/
+viz/_shot/
+
+# Large reference PDFs downloaded from GSI (~88 MB). Re-fetchable via
+# scripts/fetch/, and GSI restricts redistribution — keep them out of a
+# public repo on both counts.
+docs/data_research/gsi/*.pdf
+
+# Generated viz bundle (~11 MB) — rebuilt by scripts/viz/
+viz/index.html
+viz/data/

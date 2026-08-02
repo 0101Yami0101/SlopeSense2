@@ -1,0 +1,8 @@
+# App-only dependencies. The deployed app reads the pre-exported 0.45 MB bundle
+# in assets/ and needs none of the geospatial or ML stack — no rasterio,
+# geopandas, lightgbm or pysheds. That is what lets it run on a free 1 GB host.
+numpy>=1.26
+pandas>=2.1
+pillow>=10.0
+requests>=2.31
+streamlit>=1.40

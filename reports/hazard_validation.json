@@ -1,0 +1,70 @@
+{
+  "n_events": 56,
+  "n_negatives": 20000,
+  "models": {
+    "susceptibility only (WHERE)": {
+      "auc": 0.6826955357142857,
+      "ci95": 0.12190279983816128
+    },
+    "trigger only (WHEN)": {
+      "auc": 0.7377495535714286,
+      "ci95": 0.11520588211837895
+    },
+    "HAZARD = sus x trigger": {
+      "auc": 0.727986607142857,
+      "ci95": 0.1165517762099545
+    }
+  },
+  "operating_points": [
+    {
+      "pctile": 50,
+      "threshold": 0.01898963190615177,
+      "alert_rate": 0.5,
+      "capture": 0.8214285714285714,
+      "lift": 1.6428571428571428
+    },
+    {
+      "pctile": 75,
+      "threshold": 0.06613829731941223,
+      "alert_rate": 0.25,
+      "capture": 0.5892857142857143,
+      "lift": 2.357142857142857
+    },
+    {
+      "pctile": 90,
+      "threshold": 0.18460895121097565,
+      "alert_rate": 0.1,
+      "capture": 0.375,
+      "lift": 3.75
+    },
+    {
+      "pctile": 95,
+      "threshold": 0.3060213327407837,
+      "alert_rate": 0.05,
+      "capture": 0.26785714285714285,
+      "lift": 5.357142857142857
+    },
+    {
+      "pctile": 99,
+      "threshold": 0.5639117956161499,
+      "alert_rate": 0.01,
+      "capture": 0.07142857142857142,
+      "lift": 7.142857142857142
+    }
+  ],
+  "susceptibility_auc_by_label_accuracy": {
+    "exact + 1km": {
+      "n": 12,
+      "auc": 0.7776208333333333
+    },
+    "5km + 10km": {
+      "n": 27,
+      "auc": 0.7223759259259259
+    },
+    "25km + 50km": {
+      "n": 13,
+      "auc": 0.6020115384615384
+    }
+  },
+  "READ_THIS_FIRST": "These AUCs UNDERSTATE the system. The only dated inventory (NASA GLC) has km-level location error, which cripples a 100 m layer but barely touches an 11 km one \u2014 so the product scores below the trigger alone here. That is an artefact of the validation labels, not evidence that susceptibility is unhelpful: P6 measured 0.860 on precise polygons, and susceptibility AUC here rises from 0.601 on 25-50 km labels to 0.776 on exact/1 km labels. The combined system cannot be honestly scored until PX supplies well-located dated events."
+}

@@ -1,0 +1,73 @@
+{
+  "test_a": {
+    "scenes": 4,
+    "per_scene": [
+      {
+        "scene": "S1A_IW_GRDH_1SDV_20200227T115718_20200227T11",
+        "date": "2020-02-27",
+        "n_pixels": 20460,
+        "vv_auc": 0.5077042251098631,
+        "vv_slide": 0.15676364302635193,
+        "vv_control": 0.1600189208984375,
+        "vh_auc": 0.524497726532184,
+        "vh_slide": 0.0371687114238739,
+        "vh_control": 0.039749544113874435,
+        "vh_vv_ratio_auc": 0.5133132884994109,
+        "vh_vv_ratio_slide": 0.24854028224945068,
+        "vh_vv_ratio_control": 0.2572382688522339
+      },
+      {
+        "scene": "S1A_IW_GRDH_1SDV_20200222T114911_20200222T11",
+        "date": "2020-02-22",
+        "n_pixels": 17340,
+        "vv_auc": 0.5147478162511357,
+        "vv_slide": 0.19868776202201843,
+        "vv_control": 0.1909085512161255,
+        "vh_auc": 0.5049952257516074,
+        "vh_slide": 0.04752754792571068,
+        "vh_control": 0.046693287789821625,
+        "vh_vv_ratio_auc": 0.5103914002333412,
+        "vh_vv_ratio_slide": 0.24336843192577362,
+        "vh_vv_ratio_control": 0.24990886449813843
+      },
+      {
+        "scene": "S1A_IW_GRDH_1SDV_20220223T114923_20220223T11",
+        "date": "2022-02-23",
+        "n_pixels": 17340,
+        "vv_auc": 0.512725946169227,
+        "vv_slide": 0.18092967569828033,
+        "vv_control": 0.17539381980895996,
+        "vh_auc": 0.5050283711082642,
+        "vh_slide": 0.04478634521365166,
+        "vh_control": 0.044215574860572815,
+        "vh_vv_ratio_auc": 0.508700915538208,
+        "vh_vv_ratio_slide": 0.25020545721054077,
+        "vh_vv_ratio_control": 0.25464436411857605
+      },
+      {
+        "scene": "S1A_IW_GRDH_1SDV_20220223T114858_20220223T11",
+        "date": "2022-02-23",
+        "n_pixels": 77,
+        "vv_auc": 0.5672120087704503,
+        "vv_slide": 0.18227913975715637,
+        "vv_control": 0.15898633003234863,
+        "vh_auc": 0.5977399224152471,
+        "vh_slide": 0.04743192344903946,
+        "vh_control": 0.038025904446840286,
+        "vh_vv_ratio_auc": 0.5314555574295834,
+        "vh_vv_ratio_slide": 0.27607035636901855,
+        "vh_vv_ratio_control": 0.2572481036186218
+      }
+    ],
+    "mean_auc": {
+      "vv": 0.5255974990751691,
+      "vh": 0.5330653114518256,
+      "vh_vv_ratio": 0.515965290425136
+    },
+    "best_channel": "vh",
+    "best_auc": 0.5330653114518256
+  },
+  "verdict": "VETO",
+  "test_a_threshold": 0.65,
+  "reasoning": "detecting a scar's APPEARANCE is strictly harder than separating an existing scar from its surroundings, since it must also beat seasonal backscatter change. Test A is therefore a necessary condition."
+}

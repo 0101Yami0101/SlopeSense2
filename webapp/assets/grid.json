@@ -1,0 +1,30 @@
+{
+  "height": 640,
+  "width": 1180,
+  "lon_min": 91.45439121812655,
+  "lon_max": 97.53355196981371,
+  "lat_min": 26.604703897253536,
+  "lat_max": 29.557460155834942,
+  "downsample": 5,
+  "nodata_u8": 255,
+  "class_breaks_pct": [
+    50,
+    75,
+    90,
+    97
+  ],
+  "class_names": [
+    "Very Low",
+    "Low",
+    "Moderate",
+    "High",
+    "Very High"
+  ],
+  "class_colors": [
+    "#1a9850",
+    "#a6d96a",
+    "#fee08b",
+    "#f46d43",
+    "#a50026"
+  ]
+}

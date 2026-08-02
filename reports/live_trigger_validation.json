@@ -1,0 +1,37 @@
+{
+  "hindcast_auc_imerg_11km": 0.768,
+  "live_auc_openmeteo_33km": 0.7635113095238095,
+  "ci95": 0.09087184667453034,
+  "n_events": 84,
+  "n_query_points": 97,
+  "median_event_to_point_km": 15.202877631161753,
+  "climatology_start": "2010-01-01",
+  "operating_points": [
+    {
+      "threshold": 0.5,
+      "alert_rate": 0.50295,
+      "capture": 0.8214285714285714,
+      "lift": 1.6332211381421045
+    },
+    {
+      "threshold": 0.75,
+      "alert_rate": 0.234,
+      "capture": 0.6309523809523809,
+      "lift": 2.696377696377696
+    },
+    {
+      "threshold": 0.9,
+      "alert_rate": 0.08295,
+      "capture": 0.39285714285714285,
+      "lift": 4.736071643847413
+    },
+    {
+      "threshold": 0.95,
+      "alert_rate": 0.0346,
+      "capture": 0.2857142857142857,
+      "lift": 8.257638315441783
+    }
+  ],
+  "verdict": "PASS",
+  "note": "Both source AND resolution change vs the hindcast. This is the number the deployed app actually delivers."
+}

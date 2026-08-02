@@ -1,0 +1,87 @@
+{
+  "incidence_deg": 39.0,
+  "incidence_range": [
+    29.0,
+    46.0
+  ],
+  "look_azimuth_deg": {
+    "ascending": 437.0,
+    "descending": 283.0
+  },
+  "temporal": {
+    "2017-2018": {
+      "n_all_probes": 424,
+      "asc": 176,
+      "desc": 248,
+      "median_gap_d": 5.0,
+      "p90_gap_d": 7.0,
+      "n_probes": 3
+    },
+    "2019-2020": {
+      "n_all_probes": 427,
+      "asc": 182,
+      "desc": 245,
+      "median_gap_d": 5.0,
+      "p90_gap_d": 10.0,
+      "n_probes": 3
+    },
+    "2022-2023": {
+      "n_all_probes": 460,
+      "asc": 169,
+      "desc": 291,
+      "median_gap_d": 5.0,
+      "p90_gap_d": 7.0,
+      "n_probes": 3
+    },
+    "2024-2026": {
+      "n_all_probes": 719,
+      "asc": 246,
+      "desc": 473,
+      "median_gap_d": 4.0,
+      "p90_gap_d": 6.0,
+      "n_probes": 3
+    }
+  },
+  "geometry": {
+    "ascending": {
+      "landslide_cells": {
+        "layover": 0.07603973365353127,
+        "shadow": 0.0014736382490994433,
+        "usable": 0.9224866280973693
+      },
+      "all_domain": {
+        "layover": 0.032160809521241174,
+        "shadow": 0.001744487515573159,
+        "usable": 0.9660947029631857
+      }
+    },
+    "descending": {
+      "landslide_cells": {
+        "layover": 0.03639340683331514,
+        "shadow": 0.004671979041589346,
+        "usable": 0.9589346141250955
+      },
+      "all_domain": {
+        "layover": 0.027606344717248037,
+        "shadow": 0.0026007776299748,
+        "usable": 0.9697928776527771
+      }
+    },
+    "either_orbit_usable_landslide_cells": 0.9938762143870756,
+    "both_orbits_usable_landslide_cells": 0.8875450278353891,
+    "n_landslide_cells": 91610,
+    "either_orbit_by_incidence": {
+      "29deg": 0.9996070298002402,
+      "39deg": 0.9938762143870756,
+      "46deg": 0.9835389149656151
+    }
+  },
+  "verdict": "PASS",
+  "temporal_ok": true,
+  "geometric_ok": true,
+  "caveats": [
+    "geometry uses nominal mid-swath incidence; true value varies 29-46 deg",
+    "catalogue counts acquisitions, not guaranteed usable interferometric pairs",
+    "detecting a scar in SAR amplitude is harder than in optical \u2014 this gate tests only whether the data CAN see the slope, not whether a model would"
+  ]
+}

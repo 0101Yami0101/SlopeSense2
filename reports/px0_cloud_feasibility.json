@@ -1,0 +1,43 @@
+{
+  "events_tested": 45,
+  "events_total_dated": 90,
+  "window_days": 120,
+  "cloud_levels": [
+    20,
+    40,
+    60,
+    80
+  ],
+  "summary": {
+    "20": {
+      "n_with_both_sides": 9,
+      "median_window_days": 160.0,
+      "frac_within_7d": 0.0,
+      "frac_within_14d": 0.0
+    },
+    "40": {
+      "n_with_both_sides": 33,
+      "median_window_days": 80.0,
+      "frac_within_7d": 0.030303030303030304,
+      "frac_within_14d": 0.030303030303030304
+    },
+    "60": {
+      "n_with_both_sides": 39,
+      "median_window_days": 70.0,
+      "frac_within_7d": 0.02564102564102564,
+      "frac_within_14d": 0.02564102564102564
+    },
+    "80": {
+      "n_with_both_sides": 40,
+      "median_window_days": 55.0,
+      "frac_within_7d": 0.025,
+      "frac_within_14d": 0.025
+    }
+  },
+  "verdict": "VETO",
+  "best_level": 40,
+  "caveats": [
+    "scene-level cloud over a ~110 km tile, not per-pixel \u2014 pessimistic",
+    "Sentinel-2 only; pre-2015 events would need Landsat, strictly worse"
+  ]
+}

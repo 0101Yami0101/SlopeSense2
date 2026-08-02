@@ -1,0 +1,111 @@
+{
+  "trained_utc": "2026-08-01T20:19:12Z",
+  "sample": "susceptibility_samples.parquet",
+  "sample_hash": "b58e7dcc22134c1f",
+  "n_rows": 544794,
+  "features": [
+    "dem_elev_m",
+    "terrain_curv_plan",
+    "terrain_curv_prof",
+    "terrain_eastness",
+    "terrain_northness",
+    "terrain_relief_m",
+    "terrain_slope_deg",
+    "terrain_slope_max_deg",
+    "hydro_flowacc_cells",
+    "hydro_twi",
+    "dist_lineament_m",
+    "dist_river_m",
+    "dist_road_m",
+    "soil_bdod_0-5cm_cgcm3",
+    "soil_bdod_15-30cm_cgcm3",
+    "soil_bdod_60-100cm_cgcm3",
+    "soil_cfvo_0-5cm_cm3dm3",
+    "soil_cfvo_15-30cm_cm3dm3",
+    "soil_cfvo_60-100cm_cm3dm3",
+    "soil_clay_0-5cm_gkg",
+    "soil_clay_15-30cm_gkg",
+    "soil_clay_60-100cm_gkg",
+    "soil_sand_0-5cm_gkg",
+    "soil_sand_15-30cm_gkg",
+    "soil_sand_60-100cm_gkg",
+    "soil_silt_0-5cm_gkg",
+    "soil_silt_15-30cm_gkg",
+    "soil_silt_60-100cm_gkg",
+    "soil_soc_0-5cm_dgkg",
+    "soil_soc_15-30cm_dgkg",
+    "soil_soc_60-100cm_dgkg",
+    "lc_class_cat",
+    "geol_lithunit_cat",
+    "geol_rockgr_cat"
+  ],
+  "categorical": [
+    "lc_class_cat",
+    "geol_rockgr_cat",
+    "geol_lithunit_cat"
+  ],
+  "params": {
+    "objective": "binary",
+    "n_estimators": 600,
+    "learning_rate": 0.05,
+    "num_leaves": 63,
+    "min_child_samples": 50,
+    "subsample": 0.8,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 1.0,
+    "verbose": -1,
+    "n_jobs": -1,
+    "random_state": 42
+  },
+  "folds": [
+    {
+      "fold": 0,
+      "n_train": 452334,
+      "n_test": 92460,
+      "auc": 0.877755492211375,
+      "ap": 0.6254938379053182,
+      "p_at_1pct": 0.9329004329004329
+    },
+    {
+      "fold": 1,
+      "n_train": 414324,
+      "n_test": 130470,
+      "auc": 0.8384259785751156,
+      "ap": 0.575700127637501,
+      "p_at_1pct": 0.9363496932515337
+    },
+    {
+      "fold": 2,
+      "n_train": 452616,
+      "n_test": 92178,
+      "auc": 0.8539519759298134,
+      "ap": 0.6261421919590776,
+      "p_at_1pct": 0.9695982627578719
+    },
+    {
+      "fold": 3,
+      "n_train": 408414,
+      "n_test": 136380,
+      "auc": 0.8785473067121079,
+      "ap": 0.6506690116098209,
+      "p_at_1pct": 0.9589141599413059
+    },
+    {
+      "fold": 4,
+      "n_train": 451488,
+      "n_test": 93306,
+      "auc": 0.8487535898702514,
+      "ap": 0.5785716777069305,
+      "p_at_1pct": 0.9035369774919614
+    }
+  ],
+  "auc_mean": 0.8594868686597327,
+  "auc_std": 0.016040213885611502,
+  "ap_mean": 0.6113153693637295,
+  "oof_auc_pooled": 0.859522151648006,
+  "sample_prevalence": 0.16666666666666666,
+  "score_meaning": "relative susceptibility index, NOT event probability",
+  "report_from": "fold models (OOF)",
+  "deploy_with": "susceptibility_full.txt"
+}

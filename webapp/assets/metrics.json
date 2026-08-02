@@ -1,0 +1,98 @@
+{
+  "susceptibility": {
+    "auc": 0.8594868686597327,
+    "auc_std": 0.016040213885611502,
+    "n_rows": 544794,
+    "n_features": 34,
+    "success_rate": [
+      {
+        "cls": 1,
+        "name": "Very Low",
+        "area_frac": 0.5,
+        "slide_frac": 0.010638883688146345,
+        "lift": 0.02127776737629269
+      },
+      {
+        "cls": 2,
+        "name": "Low",
+        "area_frac": 0.24999992887634584,
+        "slide_frac": 0.0724787717926409,
+        "lift": 0.28991516964986863
+      },
+      {
+        "cls": 3,
+        "name": "Moderate",
+        "area_frac": 0.15000007112365416,
+        "slide_frac": 0.20635689820372471,
+        "lift": 1.375712002387067
+      },
+      {
+        "cls": 4,
+        "name": "High",
+        "area_frac": 0.06999990042688417,
+        "slide_frac": 0.3076685866584434,
+        "lift": 4.395271775847843
+      },
+      {
+        "cls": 5,
+        "name": "Very High",
+        "area_frac": 0.030000099573115828,
+        "slide_frac": 0.4028568596570447,
+        "lift": 13.428517417924148
+      }
+    ]
+  },
+  "trigger": {
+    "auc": 0.7678493055555555,
+    "auc_ci95": 0.09752429390575108,
+    "n_events": 72,
+    "features": [
+      "r3",
+      "r7"
+    ],
+    "fitted": false,
+    "operating_points": [
+      {
+        "threshold": 0.5,
+        "alert_rate": 0.50385,
+        "event_capture": 0.8194444444444444,
+        "lift": 1.626365871676976
+      },
+      {
+        "threshold": 0.75,
+        "alert_rate": 0.22485,
+        "event_capture": 0.6527777777777778,
+        "lift": 2.90317001457762
+      },
+      {
+        "threshold": 0.9,
+        "alert_rate": 0.07505,
+        "event_capture": 0.4166666666666667,
+        "lift": 5.55185431934266
+      },
+      {
+        "threshold": 0.95,
+        "alert_rate": 0.0317,
+        "event_capture": 0.3055555555555556,
+        "lift": 9.638976515948126
+      },
+      {
+        "threshold": 0.99,
+        "alert_rate": 0.00435,
+        "event_capture": 0.1111111111111111,
+        "lift": 25.54278416347382
+      }
+    ]
+  },
+  "labels": {
+    "polygons": 37788,
+    "cells": 91610
+  },
+  "caveats": [
+    "Relative susceptibility index, not probability of failure (presence-only data \u2014 there is no denominator).",
+    "Rainfall is ~33 km sampled Open-Meteo; terrain is 100 m. The map's fine texture is terrain, not weather.",
+    "Hindcast AUC 0.768 used 11 km IMERG; the live forecast uses a coarser source and is expected to be somewhat weaker.",
+    "Out-of-domain cells (ice, water, slope <=10 deg) are NOT scored.",
+    "Not for operational safety decisions."
+  ]
+}
