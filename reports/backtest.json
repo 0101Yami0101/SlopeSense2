@@ -1,0 +1,98 @@
+{
+  "years": 17,
+  "monsoon_days": 3037,
+  "n_events": 84,
+  "statewide_alerts": [
+    {
+      "threshold": 0.5,
+      "alert_days_per_year": 167.94117647058823,
+      "capture": 0.8214285714285714
+    },
+    {
+      "threshold": 0.75,
+      "alert_days_per_year": 142.11764705882354,
+      "capture": 0.6309523809523809
+    },
+    {
+      "threshold": 0.9,
+      "alert_days_per_year": 96.11764705882354,
+      "capture": 0.39285714285714285
+    },
+    {
+      "threshold": 0.95,
+      "alert_days_per_year": 62.64705882352941,
+      "capture": 0.2857142857142857
+    },
+    {
+      "threshold": 0.99,
+      "alert_days_per_year": 19.705882352941178,
+      "capture": 0.011904761904761904
+    }
+  ],
+  "localised_alerts": [
+    {
+      "threshold": 0.75,
+      "cell_day_alert_frac": 0.22693651154659542,
+      "capture": 0.6309523809523809
+    },
+    {
+      "threshold": 0.9,
+      "cell_day_alert_frac": 0.07868929253977576,
+      "capture": 0.39285714285714285
+    },
+    {
+      "threshold": 0.95,
+      "cell_day_alert_frac": 0.03541883777058885,
+      "capture": 0.2857142857142857
+    },
+    {
+      "threshold": 0.99,
+      "cell_day_alert_frac": 0.0055568945208409005,
+      "capture": 0.011904761904761904
+    }
+  ],
+  "lead_time": [
+    {
+      "lead_days": -5,
+      "median_trigger": 0.753704309463501,
+      "frac_ge_090": 0.21428571428571427
+    },
+    {
+      "lead_days": -4,
+      "median_trigger": 0.7276095151901245,
+      "frac_ge_090": 0.25
+    },
+    {
+      "lead_days": -3,
+      "median_trigger": 0.7127922177314758,
+      "frac_ge_090": 0.20238095238095238
+    },
+    {
+      "lead_days": -2,
+      "median_trigger": 0.7752716541290283,
+      "frac_ge_090": 0.23809523809523808
+    },
+    {
+      "lead_days": -1,
+      "median_trigger": 0.8431017398834229,
+      "frac_ge_090": 0.35714285714285715
+    },
+    {
+      "lead_days": 0,
+      "median_trigger": 0.8626934289932251,
+      "frac_ge_090": 0.39285714285714285
+    },
+    {
+      "lead_days": 1,
+      "median_trigger": 0.8423608541488647,
+      "frac_ge_090": 0.39285714285714285
+    },
+    {
+      "lead_days": 2,
+      "median_trigger": 0.7685216069221497,
+      "frac_ge_090": 0.34523809523809523
+    }
+  ],
+  "baseline_trigger_median": 0.49901217222213745,
+  "cannot_measure": "False-alarm rate. An alert day with no recorded landslide may simply be an unrecorded landslide - 84 dated events across 16 years is a tiny fraction of what actually occurred. Any precision figure would be fiction."
+}

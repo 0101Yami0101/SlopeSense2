@@ -29,11 +29,11 @@ This document is *when and in what order*.
    PX0 Optical cloud gate              ❌ VETO         ✅ 2026-08-02
    PX0b Radar access gate              ✅ PASS         ✅ 2026-08-02
    PX0c Radar detection gate           ❌ VETO         ✅ 2026-08-02
-  ══ NEXT ═══════════════════════════════════════════════════════════
-   P9  Daily forecast run                   🔗 SPINE      ~1 week
-   P10 Delivery layer                       🔗 SPINE      ~2 weeks
-   P11 Backtest & honest numbers                          ~1 week
-  ══ MVP COMPLETE (landslide) ═══════════════════════════════════════
+   P9  Daily forecast run              Open-Meteo      ✅ 2026-08-02
+   P10 Delivery layer                  Streamlit app   ✅ 2026-08-02
+   P11 Backtest & honest numbers       signal 3-5d ahead ✅ 2026-08-03
+  ══ ✅ MVP COMPLETE (landslide) ═════════════════════════════════════
+   →   Deploy: push to GitHub, connect Streamlit Cloud (webapp/DEPLOY.md)
    →   Flood roadmap starts here
   ══ PARKED (untested, resume anytime) ══════════════════════════════
    PZ  Himalayan pooled trigger  617 dated events, 10% fetched
@@ -43,7 +43,23 @@ This document is *when and in what order*.
    PY  GSI Landslidedata_1 — now a conclusion, not a preference
 ```
 
-**Landslide MVP total: ~4 weeks remaining.**
+### ✅ LANDSLIDE MVP COMPLETE — 2026-08-03
+
+| | |
+|---|---|
+| Where a slope can fail | **AUC 0.860 ± 0.016** (spatial CV, 37,788 mapped landslides) |
+| When it might fail | **AUC 0.768** hindcast · **0.764 on the live data path** |
+| Warning lead time | **signal present 3–5 days ahead** ([BACKTEST.md](BACKTEST.md)) |
+| Deliverable | 7-day forecast web app, 0.45 MB bundle, free hosting |
+
+**Remaining to go live:** push to GitHub and connect Streamlit Cloud —
+see [webapp/DEPLOY.md](../../webapp/DEPLOY.md). ~10 minutes, needs your account.
+
+> 🚨 **Two things never to quote.** (1) A **false-alarm rate** — it cannot be
+> measured, because an alert day with no *recorded* landslide may simply be an
+> unrecorded one. (2) The **end-to-end hazard AUC (0.728)** as system
+> performance — it is depressed by km-level label positions. Quote the two halves
+> separately and say the product is unmeasured.
 
 > 📄 **Every attempt to enlarge the temporal inventory is recorded in
 > [TEMPORAL_INVENTORY_ATTEMPTS.md](TEMPORAL_INVENTORY_ATTEMPTS.md)** — client-facing,
