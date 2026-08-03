@@ -136,7 +136,7 @@ def finish_map(m, districts=False):
         folium.GeoJson(OUTSIDE, name="Outside state",
                        style_function=lambda _: {"fillColor": "#05070a",
                                                  "color": "#05070a",
-                                                 "weight": 0, "fillOpacity": .62}
+                                                 "weight": 0, "fillOpacity": .80}
                        ).add_to(m)
     if show_rivers and RIVERS:
         folium.GeoJson(RIVERS, name="Rivers",
@@ -155,9 +155,16 @@ def finish_map(m, districts=False):
                                                  "fill": False, "opacity": .55},
                        tooltip=folium.GeoJsonTooltip(["district"], aliases=[""])
                        ).add_to(m)
+    # Casing first, then the bright edge on top. A single hairline over dark
+    # terrain reads as a line drawn ACROSS the map; a cased edge reads as the
+    # rim of a solid body, which is what stops Arunachal's Assam-facing border
+    # looking like a defect.
+    folium.GeoJson(BOUNDARY, name="State edge",
+                   style_function=lambda _: {"color": "#020409", "weight": 6,
+                                             "opacity": .85, "fill": False}).add_to(m)
     folium.GeoJson(BOUNDARY, name="State",
                    style_function=lambda _: {"color": T.BOUNDARY_INK[basemap],
-                                             "weight": 2.6, "fill": False}).add_to(m)
+                                             "weight": 2.2, "fill": False}).add_to(m)
     if inv_mode != "Off" and INVENTORY:
         _add_inventory(m)
     if show_labels:
@@ -388,8 +395,12 @@ if view == "Forecast":
             f"<div class='lg'><i style='background:{c}'></i>{n}<b>{100*s:.0f}%</b></div>"
             for n, c, s in zip(T.CLASS_NAMES, T.CLASS_COLORS, shares))
         st.markdown(f"<div class='legend-strip'>{chips}<div class='lg-note'>"
-                    f"Terrain 100 m · rainfall ~33 km · uncoloured = not assessed"
+                    f"Terrain 100 m · rainfall ~33 km · shaded = outside Arunachal"
                     f"</div></div>", unsafe_allow_html=True)
+        st.caption("Arunachal wraps around the top of the Assam valley, so its "
+                   "southern border runs across the middle of the map and the "
+                   "Tirap–Changlang districts sit below it as a separate lobe. "
+                   "The shaded ground between them is Assam, not a gap in the data.")
 
     with right:
         st.markdown("<div class='map-head'><div class='mh-dot'></div>"
