@@ -49,7 +49,8 @@ import numpy as np
 import rasterio
 from rasterio.enums import Resampling
 
-from common import BOUNDARIES, INTERIM, PROCESSED, ROOT
+from common import (BOUNDARIES, EXPOSURE, HYDROLOGY, INTERIM, LABELS,
+                    PROCESSED, ROOT)
 
 warnings.filterwarnings("ignore")
 
@@ -149,15 +150,81 @@ def main() -> None:
     # ── vectors ──────────────────────────────────────────────────────────
     d = gpd.read_file(BOUNDARIES / "gadm_district-boundary_vector_arunachal.gpkg")
     d = d[["NAME_2", "geometry"]].dissolve(by="NAME_2").reset_index()
-    d["geometry"] = d.geometry.simplify(0.004)
+    d["geometry"] = d.geometry.simplify(0.003)
     d.rename(columns={"NAME_2": "district"}).to_file(
         OUT / "districts.geojson", driver="GeoJSON")
 
+    # ⚠️ DISSOLVE FIRST. GADM stores Arunachal as TWO overlapping polygons
+    # (an administrative split). Drawing both outlines draws the seam where
+    # they meet — which renders as a stray line slicing the state in half.
+    # Unioning them leaves only the true outer edge.
     b = gpd.read_file(BOUNDARIES / "gadm_state-boundary_vector_arunachal.gpkg")
-    b["geometry"] = b.geometry.simplify(0.004)
-    b[["geometry"]].to_file(OUT / "boundary.geojson", driver="GeoJSON")
-    print(f"  districts {len(d)}  "
-          f"{(OUT/'districts.geojson').stat().st_size/1e6:.2f} MB")
+    merged = b.geometry.union_all()
+    b = gpd.GeoDataFrame(geometry=[merged], crs=b.crs)
+    b["geometry"] = b.geometry.simplify(0.002)
+    b.to_file(OUT / "boundary.geojson", driver="GeoJSON")
+    print(f"  districts {len(d)}  boundary dissolved from 2 polygons -> 1")
+
+    # ── roads: the major network only ────────────────────────────────────
+    # 107,302 OSM ways is far too much for a browser. Trunk/primary/secondary
+    # is the network that actually matters for landslide access and closure,
+    # and it is what a road-cut hazard conversation is about.
+    rp = EXPOSURE / "osm_roads_vector_arunachal.gpkg"
+    if rp.exists():
+        r = gpd.read_file(rp)
+        keep = ["motorway", "trunk", "primary", "secondary",
+                "motorway_link", "trunk_link", "primary_link"]
+        r = r[r.highway.isin(keep)][["highway", "geometry"]]
+        r["geometry"] = r.geometry.simplify(0.001)
+        r.to_file(OUT / "roads.geojson", driver="GeoJSON")
+        print(f"  roads      {len(r):,} of {107302:,} (major only)  "
+              f"{(OUT/'roads.geojson').stat().st_size/1e6:.2f} MB")
+
+    # ── rivers: main stems only ──────────────────────────────────────────
+    hp = HYDROLOGY / "hydrosheds_rivers_vector_arunachal.gpkg"
+    if hp.exists():
+        rv = gpd.read_file(hp)
+        col = "ORD_STRA" if "ORD_STRA" in rv.columns else None
+        rv = (rv[rv[col] >= 4] if col else
+              rv.nlargest(2500, "LENGTH_KM"))[["geometry"]]
+        rv["geometry"] = rv.geometry.simplify(0.002)
+        rv.to_file(OUT / "rivers.geojson", driver="GeoJSON")
+        print(f"  rivers     {len(rv):,} main stems  "
+              f"{(OUT/'rivers.geojson').stat().st_size/1e6:.2f} MB")
+
+    # ── settlements: a search index, not a map layer ─────────────────────
+    sp = EXPOSURE / "apssdi_settlements_vector_arunachal.geojson"
+    if sp.exists():
+        s_ = gpd.read_file(sp).to_crs(4326)
+        s_ = s_[s_.geometry.notna()]
+        namecol = "Name" if "Name" in s_.columns else s_.columns[0]
+        towns = [{"n": str(nm), "y": round(float(g.y), 4), "x": round(float(g.x), 4)}
+                 for nm, g in zip(s_[namecol], s_.geometry)
+                 if str(nm) not in ("nan", "None", "")]
+        (OUT / "towns.json").write_text(json.dumps(towns, separators=(",", ":")))
+        print(f"  towns      {len(towns):,} searchable  "
+              f"{(OUT/'towns.json').stat().st_size/1e6:.2f} MB")
+
+    # ── the landslide inventory itself — the project's strongest evidence ──
+    # Centroids, 4 dp (~11 m), so 37,788 real mapped failures ship in ~0.6 MB.
+    inv = []
+    for f in ("gsi-nlfc_landslides_polygon_arunachal.geojson",
+              "bhuvan_ar_slim_2014_gcs_polygon_arunachal.geojson",
+              "bhuvan_ar_slim_2017_polygon_arunachal.geojson",
+              "bhuvan_ls_arunachal_2023_polygon_arunachal.geojson"):
+        p = LABELS / f
+        if not p.exists():
+            continue
+        gg = gpd.read_file(p).to_crs(4326)
+        gg = gg[gg.geometry.notna() & ~gg.geometry.is_empty]
+        c = gg.geometry.centroid
+        src = "GSI" if f.startswith("gsi") else f.split("_")[2][:4]
+        inv += [{"y": round(float(y), 4), "x": round(float(x), 4), "s": src}
+                for x, y in zip(c.x, c.y)]
+    if inv:
+        (OUT / "landslides.json").write_text(json.dumps(inv, separators=(",", ":")))
+        print(f"  inventory  {len(inv):,} mapped landslides  "
+              f"{(OUT/'landslides.json').stat().st_size/1e6:.2f} MB")
 
     # ── the honest numbers ───────────────────────────────────────────────
     sm = json.loads((ROOT / "models" / "_susceptibility_meta.json").read_text())

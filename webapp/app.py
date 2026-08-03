@@ -20,7 +20,7 @@ import folium
 import numpy as np
 import pandas as pd
 import streamlit as st
-from folium.plugins import Fullscreen, MiniMap
+from folium.plugins import FastMarkerCluster, Fullscreen, HeatMap, MiniMap
 from folium.raster_layers import ImageOverlay
 from streamlit_folium import st_folium
 
@@ -56,6 +56,18 @@ def load_bundle():
     return g, sus, near, quant, pts, met, dist, bnd
 
 
+def _opt(name):
+    """Optional bundle file — the app must still run if one is absent."""
+    p = ASSETS / name
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+@st.cache_data(show_spinner=False)
+def load_extras():
+    return (_opt("roads.geojson"), _opt("rivers.geojson"),
+            _opt("towns.json"), _opt("landslides.json"))
+
+
 # TTL of 1 h: the underlying forecast only updates a few times a day, and this
 # also caps how hard a busy page hits a free API — the cache is shared across
 # all visitors, so traffic does not multiply requests.
@@ -65,6 +77,7 @@ def load_forecast(lats: tuple, lons: tuple):
 
 
 G, SUS, NEAR, QUANT, PTS, MET, DISTRICTS, BOUNDARY = load_bundle()
+ROADS, RIVERS, TOWNS, INVENTORY = load_extras()
 H, W = G["height"], G["width"]
 WEST, EAST, SOUTH, NORTH = G["west"], G["east"], G["south"], G["north"]
 
@@ -113,6 +126,18 @@ def base_map(zoom=7, center=None):
 
 
 def finish_map(m, districts=False):
+    """Vector layers, in draw order: rivers under roads under boundaries."""
+    if show_rivers and RIVERS:
+        folium.GeoJson(RIVERS, name="Rivers",
+                       style_function=lambda _: {"color": "#3b82f6", "weight": 1.0,
+                                                 "opacity": .55}).add_to(m)
+    if show_roads and ROADS:
+        ink = "#f8fafc" if basemap in ("Dark", "Satellite") else "#334155"
+        folium.GeoJson(ROADS, name="Major roads",
+                       style_function=lambda _: {"color": ink, "weight": 1.3,
+                                                 "opacity": .8},
+                       tooltip=folium.GeoJsonTooltip(["highway"], aliases=["Road:"])
+                       ).add_to(m)
     if districts:
         folium.GeoJson(DISTRICTS, name="Districts",
                        style_function=lambda _: {"color": "#9fb3c8", "weight": .9,
@@ -121,8 +146,9 @@ def finish_map(m, districts=False):
                        ).add_to(m)
     folium.GeoJson(BOUNDARY, name="State",
                    style_function=lambda _: {"color": T.BOUNDARY_INK[basemap],
-                                             "weight": 2.1, "fill": False,
-                                             "dashArray": "6 3"}).add_to(m)
+                                             "weight": 2.2, "fill": False}).add_to(m)
+    if inv_mode != "Off" and INVENTORY:
+        _add_inventory(m)
     if show_labels:
         # Labels ride in a pane ABOVE the overlay, or place names vanish under it.
         folium.map.CustomPane("labels", z_index=650).add_to(m)
@@ -133,6 +159,23 @@ def finish_map(m, districts=False):
     if show_minimap:
         MiniMap(toggle_display=True, minimized=True).add_to(m)
     return m
+
+
+def _add_inventory(m):
+    """37,788 mapped landslides.
+
+    Individual markers would stall the browser at this count, so: a heatmap for
+    the density story, or FastMarkerCluster (which buckets client-side) when
+    someone wants to drill into individual failures.
+    """
+    pts = [(d["y"], d["x"]) for d in INVENTORY]
+    if inv_mode == "Heatmap":
+        HeatMap(pts, radius=8, blur=11, min_opacity=.35,
+                gradient={0.2: "#1e3a8a", 0.45: "#38bdf8",
+                          0.7: "#fde047", 1.0: "#dc2626"},
+                name="Landslide density").add_to(m)
+    else:
+        FastMarkerCluster(pts, name="Mapped landslides").add_to(m)
 
 
 @st.cache_data(show_spinner=False)
@@ -167,7 +210,8 @@ def district_table(cls_bytes: bytes, shape: tuple, tag: str):
 
 
 # ─────────────────────────── sidebar ─────────────────────────────────────────
-VIEWS = [("🌧️", "Forecast"), ("🗺️", "Susceptibility"), ("📊", "Model & Validation")]
+VIEWS = [("🌧️", "Forecast"), ("🗺️", "Susceptibility"),
+         ("🧭", "Evidence"), ("📊", "Model & Validation")]
 if "view" not in st.session_state:
     st.session_state.view = VIEWS[0][1]
 
@@ -193,14 +237,42 @@ with st.sidebar:
     view = st.session_state.view
 
     st.divider()
-    st.markdown("<div class='side-label'>Map</div>", unsafe_allow_html=True)
-    basemap = st.selectbox("Basemap", list(T.BASEMAPS), index=0,
-                           label_visibility="collapsed")
-    opacity = st.slider("Overlay opacity", 0.0, 1.0, 0.80, 0.05)
+    st.markdown("<div class='side-label'>Basemap</div>", unsafe_allow_html=True)
+    basemap = st.radio("Basemap", list(T.BASEMAPS), horizontal=True, index=0,
+                       label_visibility="collapsed")
+    opacity = st.slider("Hazard overlay opacity", 0.0, 1.0, 0.80, 0.05)
+
     st.markdown("<div class='side-label'>Layers</div>", unsafe_allow_html=True)
-    show_districts = st.toggle("District boundaries", value=False)
-    show_labels = st.toggle("Place names", value=True)
-    show_minimap = st.toggle("Mini-map", value=False)
+    c1, c2 = st.columns(2)
+    with c1:
+        show_roads = st.toggle("Roads", value=True,
+                               help="5,536 major roads. Road cuts over-steepen "
+                                    "slopes — the strongest proximity signal in "
+                                    "our inventory.")
+        show_districts = st.toggle("Districts", value=False)
+        show_minimap = st.toggle("Mini-map", value=False)
+    with c2:
+        show_rivers = st.toggle("Rivers", value=False,
+                                help="7,181 main stems. Rivers undercut slope "
+                                     "toes, removing what holds them up.")
+        show_labels = st.toggle("Names", value=True)
+
+    st.markdown("<div class='side-label'>Landslide inventory</div>",
+                unsafe_allow_html=True)
+    inv_mode = st.radio("Inventory", ["Off", "Heatmap", "Clusters"],
+                        horizontal=True, index=0, label_visibility="collapsed",
+                        help="37,788 landslides mapped by GSI, NRSC Bhuvan and "
+                             "APSAC — the evidence the model is built on.")
+
+    st.markdown("<div class='side-label'>Jump to</div>", unsafe_allow_html=True)
+    town_names = ["—"] + sorted({t["n"] for t in (TOWNS or [])})
+    pick = st.selectbox("Town", town_names, index=0, label_visibility="collapsed",
+                        help=f"{len(town_names)-1:,} settlements")
+    focus = None
+    if pick != "—" and TOWNS:
+        t = next((x for x in TOWNS if x["n"] == pick), None)
+        if t:
+            focus = (t["y"], t["x"])
 
     st.divider()
     st.caption("⚠️ Not for operational safety decisions. Relative index, "
@@ -283,12 +355,17 @@ if view == "Forecast":
                     f"<div class='mh-title'>Hazard — {sel.strftime('%d %b')}</div>"
                     f"<div class='mh-note'>scroll to zoom · click any point to "
                     f"inspect</div></div>", unsafe_allow_html=True)
-        m = base_map()
+        m = base_map(zoom=10 if focus else 7, center=focus)
         ImageOverlay(rgba_overlay(cls), bounds=[[SOUTH, WEST], [NORTH, EAST]],
                      opacity=opacity, name="Hazard").add_to(m)
         finish_map(m, districts=show_districts)
+        if focus:
+            folium.Marker(focus, tooltip=pick,
+                          icon=folium.Icon(color='lightblue', icon='map-pin',
+                                           prefix='fa')).add_to(m)
         out = st_folium(m, height=T.MAP_H, use_container_width=True,
-                        returned_objects=["last_clicked"], key="fmap")
+                        returned_objects=["last_clicked"],
+                        key=f"fmap_{pick}")
 
         shares = [float((cls[assessed] == i).mean()) if assessed.any() else 0
                   for i in range(1, 6)]
@@ -376,7 +453,7 @@ elif view == "Susceptibility":
                 "<div class='mh-title'>Susceptibility</div>"
                 "<div class='mh-note'>scroll to zoom · drag to pan</div></div>",
                 unsafe_allow_html=True)
-    m = base_map()
+    m = base_map(zoom=10 if focus else 7, center=focus)
     ImageOverlay(rgba_overlay(scls), bounds=[[SOUTH, WEST], [NORTH, EAST]],
                  opacity=opacity).add_to(m)
     finish_map(m, districts=show_districts)
@@ -394,6 +471,93 @@ elif view == "Susceptibility":
             use_container_width=True, hide_index=True)
         st.caption("Read the bottom row: the smallest, reddest sliver of the "
                    "state contains a large share of every landslide mapped there.")
+
+
+# ═════════════════════════ VIEW: EVIDENCE ════════════════════════════════════
+elif view == "Evidence":
+    st.markdown("<div class='eyebrow'>What this is built on</div>",
+                unsafe_allow_html=True)
+    st.markdown("#### The evidence base")
+    st.markdown("Every number in this app traces back to observed data. This is "
+                "what that data actually is.")
+
+    k = st.columns(4)
+    k[0].metric("Landslides mapped", f"{len(INVENTORY):,}" if INVENTORY else "—")
+    k[1].metric("Days of rainfall", "9,555", "26 years, no gaps")
+    k[2].metric("Terrain cells", "8.2 M", "100 m resolution")
+    k[3].metric("Model inputs", f"{MET['susceptibility']['n_features']}")
+
+    st.markdown("<div class='eyebrow'>Where the landslides are</div>",
+                unsafe_allow_html=True)
+    st.markdown("Each of these is a real, surveyed failure — not a model output. "
+                "Turn on **Heatmap** or **Clusters** in the sidebar to explore them "
+                "on any map in this app.")
+
+    if INVENTORY:
+        m = base_map(zoom=10 if focus else 7, center=focus)
+        HeatMap([(d["y"], d["x"]) for d in INVENTORY], radius=8, blur=11,
+                min_opacity=.35,
+                gradient={0.2: "#1e3a8a", 0.45: "#38bdf8",
+                          0.7: "#fde047", 1.0: "#dc2626"}).add_to(m)
+        folium.GeoJson(BOUNDARY, style_function=lambda _: {
+            "color": T.BOUNDARY_INK[basemap], "weight": 2.2, "fill": False}).add_to(m)
+        if show_roads and ROADS:
+            ink = "#f8fafc" if basemap in ("Dark", "Satellite") else "#334155"
+            folium.GeoJson(ROADS, style_function=lambda _: {
+                "color": ink, "weight": 1.1, "opacity": .7}).add_to(m)
+        Fullscreen(position="topleft").add_to(m)
+        st_folium(m, height=T.MAP_H, use_container_width=True,
+                  returned_objects=[], key="emap")
+        st.caption("Landslide density. Turn on **Roads** in the sidebar — the "
+                   "clustering along the road network is real, and it is partly "
+                   "physical (road cuts over-steepen slopes) and partly a survey "
+                   "artefact (surveyors reach roadsides more easily). We keep the "
+                   "feature, but never read its importance as pure physics.")
+
+    src = pd.DataFrame([
+        {"Dataset": "GSI National Landslide Inventory", "What": "Mapped failure outlines",
+         "Scale": "26,459 polygons", "Used for": "Where slopes fail"},
+        {"Dataset": "NRSC Bhuvan / APSAC SILAAS", "What": "Post-monsoon surveys 2014/17/23",
+         "Scale": "11,329 polygons", "Used for": "Where slopes fail"},
+        {"Dataset": "NASA Global Landslide Catalog", "What": "Landslides with a known date",
+         "Scale": "84 events", "Used for": "When they fail"},
+        {"Dataset": "NASA GPM IMERG", "What": "Daily rainfall 2000–2026",
+         "Scale": "9,555 days", "Used for": "Rainfall history"},
+        {"Dataset": "Open-Meteo", "What": "Live + forecast rainfall",
+         "Scale": "97 points, 7 days", "Used for": "The live forecast"},
+        {"Dataset": "Copernicus DEM", "What": "Elevation",
+         "Scale": "30 m", "Used for": "Slope, aspect, curvature, wetness"},
+        {"Dataset": "SoilGrids", "What": "Soil properties",
+         "Scale": "18 layers", "Used for": "Where slopes fail"},
+        {"Dataset": "ESA WorldCover", "What": "Land cover",
+         "Scale": "10 m", "Used for": "Where slopes fail"},
+        {"Dataset": "APSSDI", "What": "Lithology + fault lines",
+         "Scale": "4,777 lineaments", "Used for": "Where slopes fail"},
+        {"Dataset": "OpenStreetMap", "What": "Road network",
+         "Scale": "107,302 ways", "Used for": "Where slopes fail"},
+        {"Dataset": "HydroSHEDS", "What": "River network",
+         "Scale": "50,800 reaches", "Used for": "Where slopes fail"},
+    ])
+    st.markdown("<div class='eyebrow'>Every source</div>", unsafe_allow_html=True)
+    st.dataframe(src, use_container_width=True, hide_index=True, height=420)
+
+    st.markdown("<div class='eyebrow'>The imbalance that shapes everything</div>",
+                unsafe_allow_html=True)
+    a, b = st.columns(2)
+    a.markdown("##### Where — abundant\n"
+               f"**{len(INVENTORY):,}** mapped landslides.\n\n"
+               "Enough to train a proper model, test it on regions it has never "
+               "seen, and still have data left over. This half is strong.")
+    b.markdown("##### When — scarce\n"
+               "**84** landslides with a known date.\n\n"
+               "Three orders of magnitude fewer. This is why the timing half is a "
+               "transparent rule rather than a learned model — and it is the single "
+               "biggest limit on the whole system.")
+    st.markdown("<div class='caveat'>We tried five separate routes to find more "
+                "dated landslides — including reading dates off satellite imagery "
+                "and radar. Four failed, and we documented why. The honest position "
+                "is that this is a data problem, not a modelling one.</div>",
+                unsafe_allow_html=True)
 
 
 # ═════════════════════════ VIEW: MODEL ═══════════════════════════════════════
