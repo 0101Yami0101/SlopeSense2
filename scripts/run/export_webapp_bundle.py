@@ -154,16 +154,33 @@ def main() -> None:
     d.rename(columns={"NAME_2": "district"}).to_file(
         OUT / "districts.geojson", driver="GeoJSON")
 
-    # ⚠️ DISSOLVE FIRST. GADM stores Arunachal as TWO overlapping polygons
-    # (an administrative split). Drawing both outlines draws the seam where
-    # they meet — which renders as a stray line slicing the state in half.
-    # Unioning them leaves only the true outer edge.
+    # ── state outline ────────────────────────────────────────────────────
+    # GADM splits Arunachal by POLITICAL STATUS, not administration:
+    #     GID_0 = IND  area 1.36   the part India holds uncontested
+    #     GID_0 = Z07  area 6.17   Z07 is GADM's disputed-territory code
+    # Unioning them (area 7.525) leaves a notch along the north-east that
+    # renders as a stray line running Dibrugarh -> Hawai. Verified it is not a
+    # union or simplify artefact: districts-union gives the identical 7.525,
+    # and every dissolve/closing variant reproduces the same notch.
+    #
+    # So the outline is taken from the boundary used by the earlier SlopeSense
+    # build (area 7.629), which carries Arunachal's full extent. For an Indian
+    # government client that is also the correct representation — official
+    # Indian maps show the whole state.
+    ALT = Path(r"D:/CODE/BeeDigital/LandslideSM/app/assets/boundary.geojson")
     b = gpd.read_file(BOUNDARIES / "gadm_state-boundary_vector_arunachal.gpkg")
-    merged = b.geometry.union_all()
-    b = gpd.GeoDataFrame(geometry=[merged], crs=b.crs)
-    b["geometry"] = b.geometry.simplify(0.002)
-    b.to_file(OUT / "boundary.geojson", driver="GeoJSON")
-    print(f"  districts {len(d)}  boundary dissolved from 2 polygons -> 1")
+    merged = b.geometry.union_all()          # analysis extent — matches the raster
+    if ALT.exists():
+        outline = gpd.read_file(ALT).geometry.union_all()
+        src = "full-extent outline (SlopeSense source)"
+    else:
+        outline = merged
+        src = "GADM union — fallback, will show the NE notch"
+    gpd.GeoDataFrame(geometry=[outline.simplify(0.0015)], crs="EPSG:4326"
+                     ).to_file(OUT / "boundary.geojson", driver="GeoJSON")
+    print(f"  districts {len(d)}   outline: {src}")
+    print(f"    display area {outline.area:.3f} vs analysis extent {merged.area:.3f} "
+          f"— the difference is high northern ground we do not assess anyway")
 
     # ── roads: major network, CLIPPED TO THE STATE ───────────────────────
     # ⚠️ The source files are cut to a bounding RECTANGLE, not to Arunachal.
@@ -202,14 +219,14 @@ def main() -> None:
               f"(clipped from {before:,})  "
               f"{(OUT/'rivers.geojson').stat().st_size/1e6:.2f} MB")
 
-    # ── an inverted mask: everything OUTSIDE Arunachal ───────────────────
+    # ── an inverted mask: everything OUTSIDE the displayed outline ───────
     # Arunachal pinches to a narrow neck near 95E where Assam pushes up, so
     # the two boundary lines run close together and read as a stray line
     # slicing the state. Dimming the outside makes "inside" unmistakable and
     # the neck legible as real geography rather than a rendering fault.
     from shapely.geometry import box
     outer = box(west - 4, south - 4, east + 4, north + 4)
-    gpd.GeoDataFrame(geometry=[outer.difference(merged)], crs="EPSG:4326"
+    gpd.GeoDataFrame(geometry=[outer.difference(outline)], crs="EPSG:4326"
                      ).to_file(OUT / "outside_mask.geojson", driver="GeoJSON")
     print(f"  outside_mask  dims everything beyond the state")
 
