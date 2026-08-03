@@ -1,0 +1,14 @@
+# Dark theme to match the app's own palette, so there is no flash of a light
+# shell before the CSS loads.
+[theme]
+base = "dark"
+primaryColor = "#f46d43"
+backgroundColor = "#0f1116"
+secondaryBackgroundColor = "#191c24"
+textColor = "#e6e8ec"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
