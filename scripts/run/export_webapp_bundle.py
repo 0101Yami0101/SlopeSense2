@@ -165,32 +165,53 @@ def main() -> None:
     b.to_file(OUT / "boundary.geojson", driver="GeoJSON")
     print(f"  districts {len(d)}  boundary dissolved from 2 polygons -> 1")
 
-    # ── roads: the major network only ────────────────────────────────────
-    # 107,302 OSM ways is far too much for a browser. Trunk/primary/secondary
-    # is the network that actually matters for landslide access and closure,
-    # and it is what a road-cut hazard conversation is about.
+    # ── roads: major network, CLIPPED TO THE STATE ───────────────────────
+    # ⚠️ The source files are cut to a bounding RECTANGLE, not to Arunachal.
+    # Measured: of 5,536 major roads in the box, only 1,236 (22%) touch the
+    # state — the rest are Assam, Nagaland, Bhutan and Tibet. Shipped
+    # unclipped they dominate the map and make Arunachal look roadless, which
+    # is both ugly and misleading. Clip to the boundary.
     rp = EXPOSURE / "osm_roads_vector_arunachal.gpkg"
     if rp.exists():
         r = gpd.read_file(rp)
         keep = ["motorway", "trunk", "primary", "secondary",
                 "motorway_link", "trunk_link", "primary_link"]
         r = r[r.highway.isin(keep)][["highway", "geometry"]]
+        before = len(r)
+        r = gpd.clip(r, merged)
+        r = r[~r.geometry.is_empty & r.geometry.notna()]
         r["geometry"] = r.geometry.simplify(0.001)
         r.to_file(OUT / "roads.geojson", driver="GeoJSON")
-        print(f"  roads      {len(r):,} of {107302:,} (major only)  "
+        print(f"  roads      {len(r):,} inside the state "
+              f"(clipped from {before:,} in the bbox)  "
               f"{(OUT/'roads.geojson').stat().st_size/1e6:.2f} MB")
 
-    # ── rivers: main stems only ──────────────────────────────────────────
+    # ── rivers: main stems, also clipped ─────────────────────────────────
     hp = HYDROLOGY / "hydrosheds_rivers_vector_arunachal.gpkg"
     if hp.exists():
         rv = gpd.read_file(hp)
         col = "ORD_STRA" if "ORD_STRA" in rv.columns else None
         rv = (rv[rv[col] >= 4] if col else
               rv.nlargest(2500, "LENGTH_KM"))[["geometry"]]
+        before = len(rv)
+        rv = gpd.clip(rv, merged)
+        rv = rv[~rv.geometry.is_empty & rv.geometry.notna()]
         rv["geometry"] = rv.geometry.simplify(0.002)
         rv.to_file(OUT / "rivers.geojson", driver="GeoJSON")
-        print(f"  rivers     {len(rv):,} main stems  "
+        print(f"  rivers     {len(rv):,} inside the state "
+              f"(clipped from {before:,})  "
               f"{(OUT/'rivers.geojson').stat().st_size/1e6:.2f} MB")
+
+    # ── an inverted mask: everything OUTSIDE Arunachal ───────────────────
+    # Arunachal pinches to a narrow neck near 95E where Assam pushes up, so
+    # the two boundary lines run close together and read as a stray line
+    # slicing the state. Dimming the outside makes "inside" unmistakable and
+    # the neck legible as real geography rather than a rendering fault.
+    from shapely.geometry import box
+    outer = box(west - 4, south - 4, east + 4, north + 4)
+    gpd.GeoDataFrame(geometry=[outer.difference(merged)], crs="EPSG:4326"
+                     ).to_file(OUT / "outside_mask.geojson", driver="GeoJSON")
+    print(f"  outside_mask  dims everything beyond the state")
 
     # ── settlements: a search index, not a map layer ─────────────────────
     sp = EXPOSURE / "apssdi_settlements_vector_arunachal.geojson"

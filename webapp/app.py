@@ -65,7 +65,8 @@ def _opt(name):
 @st.cache_data(show_spinner=False)
 def load_extras():
     return (_opt("roads.geojson"), _opt("rivers.geojson"),
-            _opt("towns.json"), _opt("landslides.json"))
+            _opt("towns.json"), _opt("landslides.json"),
+            _opt("outside_mask.geojson"))
 
 
 # TTL of 1 h: the underlying forecast only updates a few times a day, and this
@@ -77,7 +78,7 @@ def load_forecast(lats: tuple, lons: tuple):
 
 
 G, SUS, NEAR, QUANT, PTS, MET, DISTRICTS, BOUNDARY = load_bundle()
-ROADS, RIVERS, TOWNS, INVENTORY = load_extras()
+ROADS, RIVERS, TOWNS, INVENTORY, OUTSIDE = load_extras()
 H, W = G["height"], G["width"]
 WEST, EAST, SOUTH, NORTH = G["west"], G["east"], G["south"], G["north"]
 
@@ -126,11 +127,21 @@ def base_map(zoom=7, center=None):
 
 
 def finish_map(m, districts=False):
-    """Vector layers, in draw order: rivers under roads under boundaries."""
+    """Vector layers, in draw order: mask, rivers, roads, boundaries."""
+    if dim_outside and OUTSIDE:
+        # Arunachal pinches to a narrow neck near 95E, so its two boundary
+        # lines run close together and read as a stray line through the state.
+        # Dimming the outside makes "inside" unmistakable and the neck legible
+        # as real geography rather than a rendering fault.
+        folium.GeoJson(OUTSIDE, name="Outside state",
+                       style_function=lambda _: {"fillColor": "#05070a",
+                                                 "color": "#05070a",
+                                                 "weight": 0, "fillOpacity": .62}
+                       ).add_to(m)
     if show_rivers and RIVERS:
         folium.GeoJson(RIVERS, name="Rivers",
-                       style_function=lambda _: {"color": "#3b82f6", "weight": 1.0,
-                                                 "opacity": .55}).add_to(m)
+                       style_function=lambda _: {"color": "#1d5fa8", "weight": 1.0,
+                                                 "opacity": .7}).add_to(m)
     if show_roads and ROADS:
         ink = "#f8fafc" if basemap in ("Dark", "Satellite") else "#334155"
         folium.GeoJson(ROADS, name="Major roads",
@@ -146,7 +157,7 @@ def finish_map(m, districts=False):
                        ).add_to(m)
     folium.GeoJson(BOUNDARY, name="State",
                    style_function=lambda _: {"color": T.BOUNDARY_INK[basemap],
-                                             "weight": 2.2, "fill": False}).add_to(m)
+                                             "weight": 2.6, "fill": False}).add_to(m)
     if inv_mode != "Off" and INVENTORY:
         _add_inventory(m)
     if show_labels:
@@ -250,12 +261,16 @@ with st.sidebar:
                                     "slopes — the strongest proximity signal in "
                                     "our inventory.")
         show_districts = st.toggle("Districts", value=False)
-        show_minimap = st.toggle("Mini-map", value=False)
+        dim_outside = st.toggle("Dim outside", value=True,
+                                help="Shade everything beyond Arunachal, so the "
+                                     "state's narrow waist near 95°E reads as "
+                                     "geography rather than a stray line.")
     with c2:
         show_rivers = st.toggle("Rivers", value=False,
                                 help="7,181 main stems. Rivers undercut slope "
                                      "toes, removing what holds them up.")
         show_labels = st.toggle("Names", value=True)
+        show_minimap = st.toggle("Mini-map", value=False)
 
     st.markdown("<div class='side-label'>Landslide inventory</div>",
                 unsafe_allow_html=True)
