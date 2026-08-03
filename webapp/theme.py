@@ -1,72 +1,197 @@
-"""Visual layer. Colours follow the SlopeSense palette so the two projects read
-as a family; the layout does not, because this app is a forecast and that one is
-a static map.
+"""Design layer — an operations console, not a dashboard.
 
-Hazard classes use a green→red ramp because it is the convention emergency
+Identity: deep ink canvas, cool sky accent, Sora for display type / Inter for
+UI. The accent is deliberately COOL because the hazard ramp is warm
+(green -> yellow -> red); a warm accent would compete with the very colours
+that carry the meaning.
+
+Hazard classes use a green->red ramp because it is the convention emergency
 managers already read. The out-of-domain grey is deliberately flat and dull: it
 must never be mistaken for "safe".
+
+Kept out of app.py so the layout code stays readable.
 """
+from __future__ import annotations
 
 CLASS_NAMES = ["Very Low", "Low", "Moderate", "High", "Very High"]
 CLASS_COLORS = ["#1a9850", "#a6d96a", "#fee08b", "#f46d43", "#a50026"]
-NOT_ASSESSED = "#3a3f47"
+NOT_ASSESSED = "#3a4351"
 
-INK = "#e8eaed"
-MUTED = "#9aa3ad"
-BG = "#12151a"
-PANEL = "#1a1e25"
-LINE = "#2b313a"
-ACCENT = "#4da3ff"
+# Basemaps. `tiles=None` on the Map plus our own TileLayer is what makes the
+# switcher work at all — folium's built-in tiles argument cannot be swapped
+# after construction.
+CARTO = ('&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> '
+         '&copy; <a href="https://carto.com/attributions">CARTO</a>')
+BASEMAPS = {
+    "Dark": ("https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png", CARTO),
+    "Satellite": ("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/"
+                  "MapServer/tile/{z}/{y}/{x}",
+                  "Tiles &copy; Esri — Esri, Maxar, Earthstar Geographics"),
+    "Terrain": ("https://tile.opentopomap.org/{z}/{x}/{y}.png",
+                'Map data &copy; OSM, SRTM · style &copy; '
+                '<a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'),
+    "Light": ("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", CARTO),
+}
+LABEL_TILES = {
+    "Dark": "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+    "Satellite": "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+    "Terrain": "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+    "Light": "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
+}
+BOUNDARY_INK = {"Dark": "#38bdf8", "Satellite": "#38bdf8",
+                "Terrain": "#1f2937", "Light": "#1f2937"}
 
-CSS = f"""
+MAP_MIN_ZOOM = 6
+MAP_H = 560
+
+CSS = """
 <style>
-  .stApp {{ background: {BG}; color: {INK}; }}
-  #MainMenu, footer, header {{ visibility: hidden; }}
-  .block-container {{ padding-top: 1.2rem; max-width: 1500px; }}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap');
 
-  .brand {{ display:flex; align-items:center; gap:.7rem; margin-bottom:.2rem; }}
-  .brand-logo {{ font-size:1.7rem; line-height:1; }}
-  .brand-name {{ font-size:1.35rem; font-weight:700; letter-spacing:-.02em; }}
-  .brand-tag {{ font-size:.66rem; letter-spacing:.16em; color:{MUTED};
-                text-transform:uppercase; }}
+:root{
+  --ink:#0b0f14; --panel:#111823; --panel-2:#161f2c; --line:#223044;
+  --txt:#e5edf5; --mut:#8fa3ba; --dim:#64798f;
+  --accent:#38bdf8; --accent-2:#818cf8;
+}
+html,body,.stApp,p,li,td,th,label,input,textarea,select,button{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+}
+h1,h2,h3,h4,h5,h6,[data-testid="stMetricValue"]{
+  font-family:'Sora','Inter',sans-serif!important; letter-spacing:-.015em;
+}
+.stApp{
+  background:
+    radial-gradient(1100px 520px at 12% -12%, rgba(56,189,248,.10), transparent 62%),
+    radial-gradient(900px 480px at 88% -6%, rgba(129,140,248,.10), transparent 60%),
+    var(--ink);
+}
+.block-container{padding-top:1.7rem; padding-bottom:3rem; max-width:1480px;}
 
-  .alert-hero {{ border-radius:14px; padding:1.1rem 1.3rem; margin:.6rem 0 1rem;
-                 border:1px solid {LINE}; background:{PANEL}; }}
-  .alert-level {{ font-size:2.0rem; font-weight:800; letter-spacing:-.03em;
-                  line-height:1.1; }}
-  .alert-sub {{ color:{MUTED}; font-size:.86rem; margin-top:.25rem; }}
+/* Header is made invisible but NOT removed — it reserves the vertical space
+   the content sits below. The sidebar's reopen button lives inside the
+   toolbar, so hiding the whole toolbar would strand a collapsed sidebar. */
+[data-testid="stHeader"]{background:transparent; box-shadow:none;}
+[data-testid="stDecoration"],.stAppDeployButton,#MainMenu,footer{display:none;}
+[data-testid="stToolbarActions"]{display:none;}
+[data-testid="stExpandSidebarButton"]{visibility:visible!important; opacity:1!important;}
 
-  .kpi {{ background:{PANEL}; border:1px solid {LINE}; border-radius:12px;
-          padding:.75rem .9rem; height:100%; }}
-  .kpi-num {{ font-size:1.45rem; font-weight:700; letter-spacing:-.02em; }}
-  .kpi-lbl {{ font-size:.7rem; color:{MUTED}; text-transform:uppercase;
-              letter-spacing:.08em; margin-top:.15rem; }}
+/* Map components mount at zero width before their own JS measures the
+   container; forcing width at the CSS layer applies first, so that flash
+   never paints. */
+iframe,[data-testid="stDeckGlJsonChart"],[data-testid="stFullScreenFrame"]{width:100%!important;}
+iframe{border-radius:14px; border:1px solid var(--line)!important;}
 
-  .daycard {{ border:1px solid {LINE}; background:{PANEL}; border-radius:11px;
-              padding:.6rem .5rem; text-align:center; }}
-  .daycard.sel {{ border-color:{ACCENT}; box-shadow:0 0 0 1px {ACCENT} inset; }}
-  .daycard .dow {{ font-size:.68rem; color:{MUTED}; text-transform:uppercase;
-                   letter-spacing:.08em; }}
-  .daycard .dnum {{ font-size:1.0rem; font-weight:700; margin:.1rem 0; }}
-  .daycard .dot {{ height:6px; border-radius:3px; margin-top:.35rem; }}
+/* ---- brand ---- */
+.brand{display:flex; align-items:center; gap:11px; margin-bottom:6px;}
+.brand-logo{
+  width:40px;height:40px;border-radius:12px;display:flex;align-items:center;
+  justify-content:center;font-size:19px;color:#06121a;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  box-shadow:0 4px 14px rgba(56,189,248,.24);
+}
+.brand-name{font-family:'Sora',sans-serif;font-weight:700;font-size:1.08rem;
+  color:var(--txt);line-height:1.15;letter-spacing:-.02em;}
+.brand-tag{font-size:.68rem;color:var(--dim);letter-spacing:.02em;}
+.side-label{font-size:.66rem;font-weight:700;letter-spacing:.13em;color:var(--dim);
+  text-transform:uppercase;margin:10px 0 2px;}
 
-  .legend {{ display:flex; gap:.45rem; flex-wrap:wrap; align-items:center;
-             font-size:.72rem; color:{MUTED}; margin:.4rem 0 .1rem; }}
-  .legend i {{ width:13px; height:13px; border-radius:3px; display:inline-block;
-               margin-right:.28rem; vertical-align:-2px; }}
+/* ---- alert banner ---- */
+.alert-band{
+  display:flex;align-items:center;gap:16px;padding:15px 20px;border-radius:16px;
+  border:1px solid var(--line);margin-bottom:14px;
+  background:linear-gradient(180deg,var(--panel-2),var(--panel));
+}
+.alert-dot{width:13px;height:13px;border-radius:50%;flex:none;}
+.alert-title{font-family:'Sora',sans-serif;font-weight:700;font-size:1.16rem;color:var(--txt);}
+.alert-sub{font-size:.82rem;color:var(--mut);margin-top:2px;}
+.alert-right{margin-left:auto;text-align:right;}
+.alert-num{font-family:'Sora',sans-serif;font-weight:700;font-size:1.5rem;color:var(--txt);}
+.alert-lbl{font-size:.63rem;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;}
 
-  .note {{ font-size:.76rem; color:{MUTED}; line-height:1.5; }}
-  .warn {{ border-left:3px solid #f0a020; padding:.5rem .8rem; background:#1e1a12;
-           border-radius:0 8px 8px 0; font-size:.78rem; color:#e6d9c0; }}
-  .stDataFrame {{ border:1px solid {LINE}; border-radius:10px; }}
-  div[data-testid="stMetricValue"] {{ font-size:1.3rem; }}
+/* ---- day strip ---- */
+[class*="st-key-day_"] button{
+  border-radius:12px!important;padding:9px 4px!important;font-weight:600!important;
+  border:1px solid var(--line)!important;background:var(--panel-2)!important;
+  color:#cfe0ef!important;line-height:1.25!important;
+}
+[class*="st-key-day_"] button:hover{border-color:var(--accent)!important;color:var(--accent)!important;}
+[class*="st-key-day_"] button[kind="primary"]{
+  background:linear-gradient(135deg,rgba(56,189,248,.16),rgba(129,140,248,.16))!important;
+  border-color:var(--accent)!important;color:var(--accent)!important;
+}
+[class*="st-key-nav_"] button{
+  text-align:left;justify-content:flex-start;font-weight:600;padding:8px 12px;border-radius:11px;
+}
+[class*="st-key-nav_"] div[data-testid="stMarkdownContainer"]{text-align:left;}
+
+/* ---- panels / metrics ---- */
+div[data-testid="stVerticalBlockBorderWrapper"]{
+  background:linear-gradient(180deg,rgba(22,31,44,.92),rgba(17,24,35,.92));
+  border-radius:18px;
+}
+[data-testid="stMetric"]{
+  background:linear-gradient(180deg,var(--panel-2),var(--panel));
+  border:1px solid var(--line);border-radius:16px;padding:12px 15px;
+}
+[data-testid="stMetricLabel"] p{
+  font-size:.66rem!important;font-weight:600!important;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--dim)!important;
+}
+[data-testid="stMetricValue"]{font-size:1.42rem;font-weight:700;color:var(--txt);}
+div[data-testid="stExpander"] > details{
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;
+}
+[data-testid="stDataFrame"]{border-radius:12px;}
+[data-testid="stSidebar"]{background:#0d131b;border-right:1px solid var(--line);}
+
+/* ---- map card ---- */
+.map-head{display:flex;align-items:center;gap:10px;padding:0 0 9px;}
+.mh-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 4px rgba(56,189,248,.15);flex:none;}
+.mh-title{font-family:'Sora',sans-serif;font-weight:600;font-size:1rem;color:var(--txt);}
+.mh-note{margin-left:auto;font-size:.73rem;color:var(--dim);}
+.legend-strip{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center;}
+.lg{display:inline-flex;align-items:center;gap:7px;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:999px;padding:4px 11px;
+  font-size:.75rem;color:#c3d3e3;white-space:nowrap;}
+.lg i{width:10px;height:10px;border-radius:3px;flex:none;}
+.lg b{color:var(--dim);font-weight:600;font-variant-numeric:tabular-nums;}
+.lg-note{font-size:.73rem;color:var(--dim);margin-left:auto;}
+
+/* ---- inspector ---- */
+.insp-empty{padding:26px 18px;text-align:center;color:var(--dim);font-size:.86rem;
+  border:1px dashed var(--line);border-radius:14px;background:rgba(17,24,35,.5);}
+.insp-row{display:flex;justify-content:space-between;padding:7px 0;
+  border-bottom:1px solid rgba(34,48,68,.6);font-size:.86rem;}
+.insp-row:last-child{border-bottom:none;}
+.insp-k{color:var(--mut);}
+.insp-v{color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums;}
+.chip{padding:2px 10px;border-radius:10px;font-weight:700;font-size:.76rem;}
+
+/* ---- misc ---- */
+.stDownloadButton button,.stButton button{
+  border-radius:10px;font-weight:600;border:1px solid var(--line);
+  background:var(--panel-2);color:#cfe0ef;
+}
+.stDownloadButton button:hover,.stButton button:hover{
+  border-color:var(--accent);color:var(--accent);background:rgba(56,189,248,.06);
+}
+.eyebrow{font-size:.68rem;font-weight:700;letter-spacing:.16em;color:var(--accent);
+  text-transform:uppercase;margin-bottom:6px;}
+.caveat{font-size:.78rem;color:var(--dim);border-left:2px solid var(--line);
+  padding-left:11px;margin:7px 0;}
+.stAlert{border-radius:13px;}
 </style>
 """
 
 
-def legend_html(include_na: bool = True) -> str:
-    parts = [f"<i style='background:{c}'></i>{n}"
-             for c, n in zip(CLASS_COLORS, CLASS_NAMES)]
-    if include_na:
-        parts.append(f"<i style='background:{NOT_ASSESSED}'></i>Not assessed")
-    return f"<div class='legend'>{''.join(parts)}</div>"
+def chip(idx: int) -> str:
+    """Coloured class pill. Dark ink on the pale mid-classes, white elsewhere."""
+    ink = "#111" if idx in (1, 2) else "#fff"
+    return (f"<span class='chip' style='background:{CLASS_COLORS[idx]};color:{ink}'>"
+            f"{CLASS_NAMES[idx]}</span>")
+
+
+def row(k: str, v: str) -> str:
+    return (f"<div class='insp-row'><div class='insp-k'>{k}</div>"
+            f"<div class='insp-v'>{v}</div></div>")

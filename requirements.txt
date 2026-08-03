@@ -1,8 +1,14 @@
-# App-only dependencies. The deployed app reads the pre-exported 0.45 MB bundle
-# in assets/ and needs none of the geospatial or ML stack — no rasterio,
-# geopandas, lightgbm or pysheds. That is what lets it run on a free 1 GB host.
+# App-only dependencies. The deployed app reads the ~0.4 MB bundle in assets/
+# and needs none of the geospatial or ML stack — no rasterio, geopandas,
+# lightgbm or pysheds. That is what lets it run on a free 1 GB host.
+#
+# folium/streamlit-folium ARE pure Python (no GDAL), so the interactive map
+# costs nothing in host compatibility. An earlier build left them out and
+# shipped a static PNG with no zoom, pan or click — that was a mistake.
 numpy>=1.26
 pandas>=2.1
 pillow>=10.0
 requests>=2.31
 streamlit>=1.40
+folium>=0.17
+streamlit-folium>=0.23

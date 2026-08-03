@@ -30,6 +30,8 @@ correlation 1.000).
 """
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import requests
 
@@ -40,35 +42,48 @@ PAST_DAYS = 10             # enough history to fill the 7-day trailing window
 FORECAST_DAYS = 8
 
 
-def fetch_rain(lats, lons, timeout: int = 25):
+def fetch_rain(lats, lons, timeout: int = 25, retries: int = 3):
     """Daily rain (mm) per query point. Returns (dates, array[n_days, n_points]).
 
-    Returns None on any failure so the app can fall back to susceptibility only
-    rather than showing a broken forecast.
+    Returns None on failure so the app degrades to susceptibility-only rather
+    than showing a broken forecast.
+
+    ⚠️ Retries with backoff on purpose. This is a free API with a per-minute
+    cap, and a public page can trip it through no fault of the visitor. Without
+    retries a single transient 429 loses the entire forecast — observed in
+    testing, where the request pattern that failed once succeeded moments later
+    unchanged.
     """
     days = None
     cols = []
     for i in range(0, len(lats), BATCH):
         la = lats[i:i + BATCH]
         lo = lons[i:i + BATCH]
-        try:
-            r = requests.get(API, params={
-                "latitude": ",".join(f"{x:.4f}" for x in la),
-                "longitude": ",".join(f"{x:.4f}" for x in lo),
-                "daily": "precipitation_sum",
-                "past_days": PAST_DAYS, "forecast_days": FORECAST_DAYS,
-                "timezone": "UTC"}, timeout=timeout)
-            r.raise_for_status()
-            js = r.json()
-        except Exception:                                      # noqa: BLE001
-            return None
-        res = js if isinstance(js, list) else [js]
-        if len(res) != len(la):
+        res = None
+        for attempt in range(retries):
+            try:
+                r = requests.get(API, params={
+                    "latitude": ",".join(f"{x:.4f}" for x in la),
+                    "longitude": ",".join(f"{x:.4f}" for x in lo),
+                    "daily": "precipitation_sum",
+                    "past_days": PAST_DAYS, "forecast_days": FORECAST_DAYS,
+                    "timezone": "UTC"}, timeout=timeout)
+                if r.status_code == 429:
+                    time.sleep(2 + 3 * attempt)
+                    continue
+                r.raise_for_status()
+                js = r.json()
+            except Exception:                                  # noqa: BLE001
+                time.sleep(1 + 2 * attempt)
+                continue
+            cand = js if isinstance(js, list) else [js]
+            if len(cand) == len(la) and all(x.get("daily") for x in cand):
+                res = cand
+                break
+        if res is None:
             return None
         for x in res:
-            d = x.get("daily")
-            if not d:
-                return None
+            d = x["daily"]
             days = d["time"]
             cols.append([0.0 if v is None else float(v)
                          for v in d["precipitation_sum"]])

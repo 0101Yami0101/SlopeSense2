@@ -75,28 +75,38 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     print("Exporting web app bundle")
 
-    # ── susceptibility, downsampled ──────────────────────────────────────
+    # ── susceptibility, reprojected to lat/lon and downsampled ───────────
+    # ⚠️ MUST be EPSG:4326. The model raster is UTM 46N; a web map's image
+    # overlay takes a plain lat/lon rectangle and stretches the image across
+    # it linearly. Handing it a UTM grid would skew every pixel — the map
+    # would look plausible and be wrong, worst of both. So reproject here,
+    # once, and the app's lat/lon -> pixel maths becomes trivial arithmetic.
+    from rasterio.warp import calculate_default_transform, reproject
     with rasterio.open(PROCESSED / "susceptibility.tif") as s:
-        h, w = s.height // DOWNSAMPLE, s.width // DOWNSAMPLE
-        sus = s.read(1, out_shape=(h, w), resampling=Resampling.average)
-        tf = s.transform * s.transform.scale(s.width / w, s.height / h)
-        bounds = s.bounds
-        crs = s.crs
+        dst_tf, dw, dh = calculate_default_transform(
+            s.crs, "EPSG:4326", s.width, s.height, *s.bounds)
+        h, w = dh // DOWNSAMPLE, dw // DOWNSAMPLE
+        dst_tf = dst_tf * dst_tf.scale(dw / w, dh / h)
+        sus = np.full((h, w), np.nan, dtype=np.float32)
+        reproject(source=rasterio.band(s, 1), destination=sus,
+                  src_transform=s.transform, src_crs=s.crs,
+                  dst_transform=dst_tf, dst_crs="EPSG:4326",
+                  src_nodata=np.nan, dst_nodata=np.nan,
+                  resampling=Resampling.average)
     ok = np.isfinite(sus)
     q = np.full((h, w), 255, dtype=np.uint8)
     q[ok] = np.clip(np.round(sus[ok] * 254), 0, 254).astype(np.uint8)
     np.savez_compressed(OUT / "susceptibility.npz", sus=q)
-    print(f"  susceptibility  {h}x{w}  assessed {100*ok.mean():.1f}%  "
-          f"{(OUT/'susceptibility.npz').stat().st_size/1e6:.2f} MB")
 
-    # ── lon/lat of every display pixel, for the nearest-point lookup ─────
-    rr, cc = np.mgrid[0:h, 0:w]
-    xs = tf.c + (cc + 0.5) * tf.a
-    ys = tf.f + (rr + 0.5) * tf.e
-    import rasterio.warp as rw
-    lonf, latf = rw.transform(crs, "EPSG:4326", xs.ravel(), ys.ravel())
-    lonp = np.array(lonf).reshape(h, w)
-    latp = np.array(latf).reshape(h, w)
+    west, north = dst_tf.c, dst_tf.f
+    east, south = west + w * dst_tf.a, north + h * dst_tf.e
+    print(f"  susceptibility  {h}x{w} @ EPSG:4326  assessed {100*ok.mean():.1f}%  "
+          f"{(OUT/'susceptibility.npz').stat().st_size/1e6:.2f} MB")
+    print(f"    bounds  W {west:.3f}  E {east:.3f}  S {south:.3f}  N {north:.3f}")
+
+    # regular lat/lon lattice — now just linear, no per-pixel reprojection
+    lonp = (west + (np.arange(w) + 0.5) * dst_tf.a)[None, :].repeat(h, 0)
+    latp = (north + (np.arange(h) + 0.5) * dst_tf.e)[:, None].repeat(w, 1)
 
     # ── climatology → quantile breakpoints ───────────────────────────────
     if not (OM / "precip_mm.npy").exists():
@@ -180,8 +190,11 @@ def main() -> None:
     }, indent=2))
 
     grid = {"height": int(h), "width": int(w),
-            "lon_min": float(lonp.min()), "lon_max": float(lonp.max()),
-            "lat_min": float(latp.min()), "lat_max": float(latp.max()),
+            "crs": "EPSG:4326",
+            "west": float(west), "east": float(east),
+            "south": float(south), "north": float(north),
+            "lon_min": float(west), "lon_max": float(east),
+            "lat_min": float(south), "lat_max": float(north),
             "downsample": DOWNSAMPLE, "nodata_u8": 255,
             "class_breaks_pct": [50, 75, 90, 97],
             "class_names": ["Very Low", "Low", "Moderate", "High", "Very High"],
