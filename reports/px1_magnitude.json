@@ -1,0 +1,22 @@
+{
+  "gate_a_rainfall_to_size": {
+    "n_dated_sized": 72,
+    "rho": 0.1256880223182524,
+    "p": 0.29279417709902905,
+    "p_kruskal": 0.5624183962629781,
+    "passed": false,
+    "by_size": {
+      "small": 15,
+      "medium": 45,
+      "large": 12
+    }
+  },
+  "gate_b_terrain_to_size": {
+    "n_polygons": 37361,
+    "spearman": 0.2821322196236772,
+    "r2": -0.015417321249509697,
+    "factor_error": 4.591849019162649,
+    "passed": false,
+    "variance_from_survey_identity": 0.16716809708054092
+  }
+}

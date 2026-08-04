@@ -450,22 +450,78 @@ else:
     days, rain, trig, fut = [], None, None, []
 
 
-def day_strip(key: str):
-    """Seven buttons, one per forecast day, with that day's peak trigger."""
+def day_strip(key: str, notes: list[str] | None = None):
+    """Seven buttons, one per forecast day.
+
+    ⚠️ `notes` must be a number that MEANS something at the scale it is shown
+    next to. This strip used to print the statewide MAXIMUM trigger, which was
+    a bug worth spelling out: the trigger is a percentile against each point's
+    own history, so the maximum over 97 points is the maximum of 97 roughly
+    uniform draws. Its expected value is 97/98 = 0.99 on a completely ORDINARY
+    day. It read as "99% chance of a landslide" and in fact carried almost no
+    information about the weather at all.
+
+    Callers now pass something scale-appropriate: the selected location's own
+    outlook on the Forecast page, the share of the state at High+ on Statewide.
+    """
     if "day_i" not in st.session_state or st.session_state.day_i not in fut:
         st.session_state.day_i = fut[0]
     cols = st.columns(len(fut))
     for n, (col, i) in enumerate(zip(cols, fut)):
         d = datetime.fromisoformat(days[i])
-        peak = float(np.nanmax(trig[i]))
         with col:
             lbl = "Today" if n == 0 else d.strftime("%a")
-            if st.button(f"{lbl}\n{d.strftime('%d %b')}\n● {peak:.2f}",
-                         key=f"day_{key}_{i}", use_container_width=True,
+            text = f"{lbl}\n{d.strftime('%d %b')}"
+            if notes:
+                text += f"\n{notes[n]}"
+            if st.button(text, key=f"day_{key}_{i}", use_container_width=True,
                          type="primary" if i == st.session_state.day_i else "secondary"):
                 st.session_state.day_i = i
                 st.rerun()
     return st.session_state.day_i
+
+
+def location_days(sel: dict | None):
+    """That one place's hazard class and score for each of the seven days.
+
+    Returns None when there is no location, or when the location sits on ground
+    the model never assessed — in both cases the strip falls back to a
+    statewide figure rather than inventing a local one.
+
+    ⚠️ Snaps to the nearest assessed cell via the SAME helper the detail panel
+    below uses. Reading SUS[r, c] directly here instead would let the strip say
+    "not assessed" while the panel underneath it reported High for a slope
+    2 km away — two numbers for one place, on one screen.
+    """
+    if not sel:
+        return None
+    px = latlon_to_px(sel["lat"], sel["lon"])
+    if px is None:
+        return None
+    snap = fc.nearest_assessed(SUS, *px)
+    if snap is None:
+        return None
+    r, c, _ = snap
+    su = float(SUS[r, c]) / 254.0
+    j = int(NEAR[r, c])
+    hz = np.array([su * float(trig[i][j]) for i in fut], dtype=np.float32)
+    return hz, fc.classify(hz)
+
+
+@st.cache_data(show_spinner=False)
+def statewide_high_share(tag: str) -> list[float]:
+    """Share of assessed land at High or Very High, for each forecast day.
+
+    This is the honest statewide headline: it varies across the week (16% today
+    to 7% next Monday in testing), it is a share of land rather than a
+    probability, and no arithmetic pins it near any particular value.
+    """
+    out = []
+    for i in fut:
+        cl = fc.classify(fc.hazard_raster(SUS, NEAR, trig[i]))
+        a = cl > 0
+        out.append(float((cl[a] >= 4).mean()) if a.any() else 0.0)
+    return out
 
 
 def hazard_layers(di: int):
@@ -555,7 +611,14 @@ if view == "Forecast":
                      "⛰️ Susceptibility": "Slope susceptibility"}[layer]
             map_head(title, "scroll to zoom · click anywhere to inspect")
 
-        di = day_strip("fc")
+        # Each button carries the outlook FOR THE SELECTED PLACE, so the number
+        # beside a date is about somewhere a person actually is.
+        ld = location_days(sel)
+        if ld is not None:
+            notes = [T.CLASS_NAMES[k - 1] for k in ld[1]]
+        else:
+            notes = [f"{100 * s:.0f}% High+" for s in statewide_high_share(days[fut[0]])]
+        di = day_strip("fc", notes)
         sel_day = datetime.fromisoformat(days[di])
         tri_pts, hz, cls = hazard_layers(di)
 
@@ -753,7 +816,8 @@ elif view == "Statewide":
 
     st.markdown("<div class='eyebrow'>The management view</div>",
                 unsafe_allow_html=True)
-    di = day_strip("sw")
+    hi_share = statewide_high_share(days[fut[0]])
+    di = day_strip("sw", [f"{100 * s:.0f}% High+" for s in hi_share])
     sel_day = datetime.fromisoformat(days[di])
     tri_pts, hz, cls = hazard_layers(di)
     assessed = cls > 0
@@ -778,12 +842,25 @@ elif view == "Statewide":
       </div>
     </div>""", unsafe_allow_html=True)
 
+    # ⚠️ Deliberately NOT the peak trigger. The trigger is a percentile against
+    # each point's own history, so the maximum across 97 points sits near 0.99
+    # on an ordinary day purely as arithmetic — a headline that never moves and
+    # invites being read as a probability. A COUNT of unusually wet points says
+    # the same thing truthfully and does move: 3 of 97 today, 0 by next Monday.
+    n_wet = int((tri_pts >= 0.90).sum())
     k = st.columns(4)
-    k[0].metric("Peak trigger", f"{np.nanmax(tri_pts):.2f}",
-                help="Highest 'unusually wet for here' score anywhere in the state.")
-    k[1].metric("Median trigger", f"{np.nanmedian(tri_pts):.2f}")
+    k[0].metric("Unusually wet points", f"{n_wet} of {len(tri_pts)}",
+                help="Weather points whose 3- and 7-day rain sits in the wettest "
+                     "10% of everything that point has recorded since 2010.")
+    k[1].metric("Median trigger", f"{np.nanmedian(tri_pts):.2f}",
+                help="The typical point's rainfall percentile — 0.50 is an "
+                     "ordinary monsoon day for that place.")
     k[2].metric("Rain, wettest point", f"{np.nanmax(rain[di]):.0f} mm")
     k[3].metric("Lead time", "Today" if ahead == 0 else f"+{ahead} d")
+    st.caption("The trigger is a percentile, not a probability: 0.90 means "
+               "*wetter than 90% of days on record here*, not a 90% chance of a "
+               "landslide. Nothing in this app estimates a probability of "
+               "failure — see **Model & Validation** for why.")
 
     with st.container(border=True):
         map_head(f"Statewide hazard — {sel_day.strftime('%d %b')}",
