@@ -274,7 +274,7 @@ def finish_map(m, districts=False, marker=None):
 
 
 def _add_inventory(m):
-    """37,788 mapped landslides.
+    """Every mapped landslide inside the state.
 
     Individual markers would stall the browser at this count, so: a heatmap for
     the density story, or FastMarkerCluster (which buckets client-side) when
@@ -351,8 +351,13 @@ VIEWS = [("📍", "Forecast"), ("🌐", "Statewide"), ("🗺️", "Susceptibilit
 if "view" not in st.session_state:
     st.session_state.view = VIEWS[0][1]
 
+# Derived, never typed in. An earlier build hardcoded "37,788" in three places;
+# when the inventory was clipped to the state the app kept quoting the old
+# figure while the map drew 494 fewer dots.
+N_INV = len(INVENTORY) if INVENTORY else MET["labels"]["polygons"]
+
 STATS = [
-    (f"{MET['labels']['polygons']:,}", "Landslides mapped"),
+    (f"{N_INV:,}", "Landslides mapped"),
     (f"{MET['susceptibility']['auc']:.3f}", "Spatial-CV AUC"),
     (f"{len(PLACES):,}", "Searchable places"),
     ("9,555", "Days of rainfall"),
@@ -372,7 +377,7 @@ with st.sidebar:
             st.markdown("""
 <div class="hero-eyebrow">Eastern Himalaya · Arunachal Pradesh</div>
 
-A daily landslide outlook: where slopes are weak, learned from 37,788 mapped
+A daily landslide outlook: where slopes are weak, learned from mapped
 failures, multiplied by how unusual this week's rain is for that exact place.
 """ + "<div class='about-stats'>" + "".join(
                 f"<div><span class='as-num'>{n}</span>"
@@ -425,8 +430,9 @@ failures, multiplied by how unusual this week's rain is for that exact place.
     inv_mode = st.radio("Inventory", ["Off", "Heatmap", "Clusters"],
                         horizontal=True, index=0, label_visibility="collapsed",
                         disabled=bare,
-                        help="37,788 landslides mapped by GSI, NRSC Bhuvan and "
-                             "APSAC — the evidence the model is built on.")
+                        help=f"{N_INV:,} landslides mapped by GSI, NRSC Bhuvan "
+                             "and APSAC, clipped to the state — the evidence "
+                             "the model is built on.")
     if bare:
         opacity = 0.0
         show_roads = show_rivers = show_districts = show_minimap = False

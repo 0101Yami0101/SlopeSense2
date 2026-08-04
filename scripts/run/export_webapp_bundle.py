@@ -244,8 +244,21 @@ def main() -> None:
               f"{(OUT/'towns.json').stat().st_size/1e6:.2f} MB")
 
     # ── the landslide inventory itself — the project's strongest evidence ──
-    # Centroids, 4 dp (~11 m), so 37,788 real mapped failures ship in ~0.6 MB.
+    # Centroids, 4 dp (~11 m), so ~37,300 real mapped failures ship in ~0.6 MB.
+    #
+    # ⚠️ CLIPPED TO THE DISPLAYED OUTLINE, like roads and rivers above. These
+    # files are named "_arunachal" but were cut to a BOUNDING BOX at download,
+    # so they carry 494 genuine GSI/Bhuvan failures that lie in Assam and
+    # Nagaland — up to 90 km past the border. Unclipped, the map clustered them
+    # into big numbered bubbles floating in Assam, which reads as a rendering
+    # fault rather than as neighbouring states' real landslides.
+    #
+    # This never touched the model: sample.py builds its domain as
+    # `inside & lc_ok & (slope > SLOPE_MIN)` against state_mask.tif, so
+    # out-of-state cells were never eligible as positives OR negatives. The
+    # contamination was in the shipped map only.
     inv = []
+    dropped = 0
     for f in ("gsi-nlfc_landslides_polygon_arunachal.geojson",
               "bhuvan_ar_slim_2014_gcs_polygon_arunachal.geojson",
               "bhuvan_ar_slim_2017_polygon_arunachal.geojson",
@@ -256,12 +269,18 @@ def main() -> None:
         gg = gpd.read_file(p).to_crs(4326)
         gg = gg[gg.geometry.notna() & ~gg.geometry.is_empty]
         c = gg.geometry.centroid
+        # Clip on the CENTROID, not the polygon: a scar straddling the border
+        # belongs to whichever state its middle sits in, and testing the
+        # polygon would keep a large Assam failure that merely grazes the line.
+        keep = c.within(outline)
+        dropped += int((~keep).sum())
         src = "GSI" if f.startswith("gsi") else f.split("_")[2][:4]
         inv += [{"y": round(float(y), 4), "x": round(float(x), 4), "s": src}
-                for x, y in zip(c.x, c.y)]
+                for x, y in zip(c[keep].x, c[keep].y)]
     if inv:
         (OUT / "landslides.json").write_text(json.dumps(inv, separators=(",", ":")))
-        print(f"  inventory  {len(inv):,} mapped landslides  "
+        print(f"  inventory  {len(inv):,} mapped landslides inside the state "
+              f"({dropped:,} dropped as outside)  "
               f"{(OUT/'landslides.json').stat().st_size/1e6:.2f} MB")
 
     # ── the honest numbers ───────────────────────────────────────────────
