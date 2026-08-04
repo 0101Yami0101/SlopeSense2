@@ -172,3 +172,104 @@ marked lower confidence. Showing 16 would look better and be partly dishonest.
 - **Score is a relative index, not probability of failure.** Presence-only data; there is no denominator.
 - **11 km rainfall must be labelled as such** — the map has 100 m terrain detail and 11 km weather detail, and viewers will assume otherwise.
 - **Not for operational safety decisions**, stated in the UI.
+
+---
+
+## 7. Revision — the location-first Forecast page
+
+A forecast is only useful *somewhere*. The first build opened on a statewide
+banner ("15.6% of assessed land at High+"), which is a management number: it
+describes ground nobody stands on. The page was restructured around one
+location, and the statewide picture moved to a view of its own.
+
+### 7.1 Information architecture
+
+| View | Question it answers | Audience |
+|---|---|---|
+| **Forecast** | What is the outlook *where I am*? | anyone |
+| **Statewide** | Which districts need resources this week? | APSDMA operations |
+| Susceptibility | Where are slopes weak, regardless of weather? | planning |
+| Evidence | What is this built on? | procurement |
+| Model & Validation | How good is it, honestly? | technical review |
+
+The statewide alert band, the four trigger KPIs and the district table moved
+wholesale to **Statewide**. Nothing was deleted.
+
+### 7.2 The search index
+
+One box replaces the old "Jump to" town dropdown, and accepts three kinds of
+input:
+
+| Input | Count | Source |
+|---|---:|---|
+| Districts | 18 | `districts.geojson` |
+| Settlements | 4,648 | APSSDI settlements layer |
+| Named anchors | 18 added | hand-entered, see below |
+| Raw coordinates | ∞ | `st.selectbox(accept_new_options=True)` |
+
+**The gazetteer has a hole at the top.** APSSDI's settlements layer is a village
+register: excellent at village level, and missing **Itanagar** — the state
+capital — along with Yingkiong, Yupia, Koloriang, Longding, Roing town and Ziro
+town (it carries only "Old Ziro" and "Ziro Point"). A search box that cannot
+find the capital is broken, so `geo.ANCHORS` names the capital and the district
+headquarters explicitly.
+
+An anchor is suppressed only when the gazetteer already holds a same-named place
+**within 12 km**. Matching on name alone was the first attempt and it was wrong:
+three unrelated villages called *Roing* hid the district headquarters 100 km
+away. 18 of 22 anchors survive that test; the other four (Dirang, Deomali,
+Jairampur, Yupia) were already present.
+
+Name collisions are resolved rather than dropped — 180 names are shared by two
+or more villages, so duplicates carry their coordinates in the label, and the
+six pairs that also round to the same 2 dp get a numeric suffix. Every one of
+the 4,648 gazetteer rows stays reachable.
+
+### 7.3 Snapping to assessed ground
+
+**12.1% of settlements (565 of 4,648) sit on a cell scored 255** — valley floors,
+riverbanks, anything flatter than 10°. Pasighat, Along, Roing and Miao are all
+among them. Returning "not assessed" for those searches is a dead end, and it is
+also physically misleading: what threatens a valley town is the slope *above*
+it, not the flat ground it stands on.
+
+So a searched location snaps to the nearest scored cell within ~5.5 km, and the
+UI **says so, with the distance**. Silently relocating someone's forecast would
+be the dishonest version of this. The click inspector deliberately does *not*
+snap — a click on a river should say "not assessed", because that is what the
+user asked about. Where nothing is assessed within range (mid-river, high
+snowfield), the answer is still "not assessed".
+
+### 7.4 Geolocation without a dependency
+
+The page asks the browser for the visitor's position on first load. This is
+**not** a Python package: a small script writes the answer into the page's query
+string and reloads, so the deploy stays at seven pure-Python requirements.
+
+Every outcome — allowed, refused, timed out, unsupported — writes a `geo` flag,
+and that flag is what stops the request repeating on every rerun; a session
+flag backs it up in case the browser blocks the iframe from navigating. A
+visitor outside Arunachal is told so plainly and the page opens on Itanagar,
+rather than silently forecasting the nearest edge pixel.
+
+### 7.5 Map layers
+
+The map moved back to the top of the card, SlopeSense-style, with a segmented
+control over three genuine layers of the same surface:
+
+- **Hazard** — susceptibility × trigger, green→red
+- **Rain trigger** — how unusual the rain is for each place, **blue** ramp
+- **Susceptibility** — the static half, green→red
+
+The rain ramp is deliberately blue. The two layers sit under one control, and
+reusing the hazard ramp for both would make "very wet" and "very dangerous" look
+like the same statement.
+
+### 7.6 Bug found while rebuilding
+
+`Model & Validation` was reading `operating_points[i]['capture']`; the key
+written by `trigger.py` is `event_capture`. **The page had been raising
+`KeyError` on every load.** Its prose also hardcoded "84 dated landslides" while
+the metric card beside it read `n_events = 72` — 84 is what the catalogue holds,
+72 is what survives the filters and actually trains the trigger. Both now read
+from `metrics.json`, so they cannot drift apart again.

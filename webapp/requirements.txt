@@ -9,6 +9,8 @@ numpy>=1.26
 pandas>=2.1
 pillow>=10.0
 requests>=2.31
-streamlit>=1.40
+# >=1.45 for st.selectbox(accept_new_options=…) — that is what lets the search
+# box take a raw latitude/longitude, not just a name from the gazetteer.
+streamlit>=1.45
 folium>=0.17
 streamlit-folium>=0.23

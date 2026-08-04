@@ -144,6 +144,35 @@ def hazard_raster(susceptibility_u8: np.ndarray, nearest: np.ndarray,
     return sus * trigger_pts[nearest]
 
 
+def nearest_assessed(sus: np.ndarray, r: int, c: int, max_cells: int = 10):
+    """Nearest cell the model actually scored. (row, col, distance_in_cells).
+
+    ⚠️ 12% of Arunachal's 4,648 settlements sit on a cell scored 255 — valley
+    floors, riverbanks, anything flatter than 10 degrees. Those are exactly the
+    towns people search for, and returning "not assessed" is a dead end that is
+    also physically misleading: what threatens a valley town is the slope ABOVE
+    it, not the flat ground it is built on.
+
+    So the search snaps to the closest scored cell — and the caller must SAY it
+    snapped, with the distance. Silently moving someone's location would be the
+    dishonest version of this.
+
+    Returns None if nothing is assessed within max_cells, which is the right
+    answer for the middle of a large river or a high snowfield.
+    """
+    if sus[r, c] != 255:
+        return r, c, 0.0
+    h, w = sus.shape
+    r0, r1 = max(r - max_cells, 0), min(r + max_cells + 1, h)
+    c0, c1 = max(c - max_cells, 0), min(c + max_cells + 1, w)
+    ok = np.argwhere(sus[r0:r1, c0:c1] != 255)
+    if ok.size == 0:
+        return None
+    d = (ok[:, 0] + r0 - r) ** 2 + (ok[:, 1] + c0 - c) ** 2
+    i = int(np.argmin(d))
+    return int(ok[i, 0] + r0), int(ok[i, 1] + c0), float(np.sqrt(d[i]))
+
+
 def classify(h: np.ndarray, breaks_pct=(50, 75, 90, 97)) -> np.ndarray:
     """1..5 by fixed hazard cuts; 0 = not assessed.
 
