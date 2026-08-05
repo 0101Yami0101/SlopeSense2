@@ -552,6 +552,66 @@ def trigger_classes(tri_pts: np.ndarray) -> np.ndarray:
     return out
 
 
+def click_panel(click, cls, hz, tri_pts, di) -> None:
+    """Details for the last-clicked map point, beside the map rather than below.
+
+    It used to sit at the bottom of the page, so every click meant scrolling
+    down to read the answer and back up to click again. Height-locked to the
+    map so a long panel scrolls inside itself instead of stretching the card
+    past the map and leaving dead space next to it.
+    """
+    st.markdown("<div class='map-head' style='padding-top:2px'>"
+                "<div class='mh-dot'></div>"
+                "<div class='mh-title'>Clicked point</div></div>",
+                unsafe_allow_html=True)
+    box = st.container(height=T.MAP_H - 34, border=False, key="click_shell")
+    with box:
+        if not click:
+            st.markdown("<div class='insp-empty'>Click anywhere on the map to "
+                        "read that exact spot — its slope susceptibility, how "
+                        "unusual the rain is there, and the next seven days."
+                        "</div>", unsafe_allow_html=True)
+            return
+        px = latlon_to_px(click["lat"], click["lng"])
+        if px is None:
+            st.markdown("<div class='insp-empty'><b>Outside the mapped area</b>"
+                        "<br>This model covers Arunachal Pradesh only.</div>",
+                        unsafe_allow_html=True)
+            return
+        r, c = px
+        su8, j = int(SUS[r, c]), int(NEAR[r, c])
+        if su8 == 255:
+            st.markdown("<div class='insp-empty'><b>Not assessed</b><br>"
+                        "Permanent ice, open water, or ground flatter than 10°. "
+                        "The model never trained on this terrain, so it reports "
+                        "nothing rather than guessing.</div>",
+                        unsafe_allow_html=True)
+            return
+        su = su8 / 254.0
+        near, km = G.nearest_place(click["lat"], click["lng"], PLACES)
+        st.markdown(
+            f"<div style='margin-bottom:9px'>{T.chip(int(cls[r, c]) - 1)}</div>"
+            + T.row("Latitude, longitude",
+                    f"{click['lat']:.4f}, {click['lng']:.4f}")
+            + T.row("Nearest settlement",
+                    f"{near['label']} · {km:.0f} km" if near else "—")
+            + T.row("Susceptibility", f"{su:.3f}")
+            + T.row("Trigger (rain vs normal)", f"{tri_pts[j]:.2f}")
+            + T.row("Hazard", f"{hz[r, c]:.3f}")
+            + T.row("Rain that day", f"{rain[di, j]:.1f} mm"),
+            unsafe_allow_html=True)
+        st.caption("Next 7 days here")
+        st.bar_chart(pd.DataFrame({
+            "day": [datetime.fromisoformat(days[i]).strftime("%d %b")
+                    for i in fut],
+            "hazard": [float(su * trig[i][j]) for i in fut]}
+        ).set_index("day"), height=170, color=T.ACCENT_2)
+        if st.button("Use this point as my location", key="use_click",
+                     use_container_width=True):
+            st.session_state.search = f"{click['lat']:.4f}, {click['lng']:.4f}"
+            st.rerun()
+
+
 @st.cache_data(show_spinner=False)
 def susceptibility_classes():
     su = SUS.astype(np.float32)
@@ -635,39 +695,53 @@ if view == "Forecast":
             zoom = 8 if sel["kind"] == "district" else 11
             marker = (sel["lat"], sel["lon"], sel["label"])
 
-        # Height-locked shell: switching layer must not collapse the card and
-        # bounce the panels below it up for a frame.
-        shell = st.container(height=T.MAP_H + 8, border=False, key="map_shell")
-        m = base_map(zoom=zoom, center=centre)
-        if not bare:
-            if layer == LAYERS[0]:
-                img, names, colors = rgba_overlay(cls, T.CLASS_COLORS), T.CLASS_NAMES, T.CLASS_COLORS
+        # Inspector LEFT, map RIGHT, side by side inside the same card.
+        #
+        # ⚠️ The map is rendered FIRST even though it sits second on screen:
+        # `out` does not exist until st_folium has run, and the inspector needs
+        # it. Streamlit places output by which column context it is written
+        # into, not by execution order, so writing the map into `cmap` before
+        # the panel into `cinfo` still draws the panel on the left.
+        cinfo, cmap = st.columns([1, 2.35], gap="medium")
+
+        with cmap:
+            # Height-locked shell: switching layer must not collapse the card
+            # and bounce the panels below it up for a frame.
+            shell = st.container(height=T.MAP_H + 8, border=False, key="map_shell")
+            m = base_map(zoom=zoom, center=centre)
+            if not bare:
+                if layer == LAYERS[0]:
+                    img, names, colors = rgba_overlay(cls, T.CLASS_COLORS), T.CLASS_NAMES, T.CLASS_COLORS
+                elif layer == LAYERS[1]:
+                    img, names, colors = (rgba_overlay(trigger_classes(tri_pts), TRIG_COLORS),
+                                          TRIG_NAMES, TRIG_COLORS)
+                else:
+                    img, names, colors = (rgba_overlay(susceptibility_classes(), T.CLASS_COLORS),
+                                          T.CLASS_NAMES, T.CLASS_COLORS)
+                ImageOverlay(img, bounds=[[SOUTH, WEST], [NORTH, EAST]],
+                             opacity=opacity, name=layer).add_to(m)
+            finish_map(m, districts=show_districts, marker=marker)
+            with shell:
+                out = st_folium(m, height=T.MAP_H, use_container_width=True,
+                                returned_objects=["last_clicked"],
+                                key=f"fmap_{layer}")
+            if bare:
+                legend_strip([], [])
             elif layer == LAYERS[1]:
-                img, names, colors = (rgba_overlay(trigger_classes(tri_pts), TRIG_COLORS),
-                                      TRIG_NAMES, TRIG_COLORS)
+                legend_strip(TRIG_NAMES, TRIG_COLORS,
+                             note=f"How unusual {sel_day.strftime('%d %b')}'s rain "
+                                  f"is for each place — not millimetres")
             else:
-                img, names, colors = (rgba_overlay(susceptibility_classes(), T.CLASS_COLORS),
-                                      T.CLASS_NAMES, T.CLASS_COLORS)
-            ImageOverlay(img, bounds=[[SOUTH, WEST], [NORTH, EAST]],
-                         opacity=opacity, name=layer).add_to(m)
-        finish_map(m, districts=show_districts, marker=marker)
-        with shell:
-            out = st_folium(m, height=T.MAP_H, use_container_width=True,
-                            returned_objects=["last_clicked"],
-                            key=f"fmap_{layer}")
-        if bare:
-            legend_strip([], [])
-        elif layer == LAYERS[1]:
-            legend_strip(TRIG_NAMES, TRIG_COLORS,
-                         note=f"How unusual {sel_day.strftime('%d %b')}'s rain is "
-                              f"for each place — not millimetres")
-        else:
-            assessed = cls > 0
-            shares = [float((cls[assessed] == i).mean()) if assessed.any() else 0
-                      for i in range(1, 6)]
-            legend_strip(T.CLASS_NAMES, T.CLASS_COLORS,
-                         shares if layer == LAYERS[0] else None,
-                         note="Terrain 100 m · rainfall ~33 km · shaded = outside Arunachal")
+                assessed = cls > 0
+                shares = [float((cls[assessed] == i).mean()) if assessed.any() else 0
+                          for i in range(1, 6)]
+                legend_strip(T.CLASS_NAMES, T.CLASS_COLORS,
+                             shares if layer == LAYERS[0] else None,
+                             note="Terrain 100 m · rainfall ~33 km · shaded = "
+                                  "outside Arunachal")
+
+        with cinfo:
+            click_panel((out or {}).get("last_clicked"), cls, hz, tri_pts, di)
 
     # ---- the located forecast -------------------------------------------- #
     if geo_state == "ok" and user_pt and not user_inside:
@@ -770,48 +844,6 @@ if view == "Forecast":
                         "Trigger": [f"{trig[i][j]:.2f}" for i in fut],
                         "Outlook": [T.CLASS_NAMES[int(x) - 1] for x in dcls]}),
                         use_container_width=True, hide_index=True, height=280)
-
-    # ---- click inspector -------------------------------------------------- #
-    click = (out or {}).get("last_clicked")
-    if click:
-        st.divider()
-        st.markdown("<div class='eyebrow'>Clicked point</div>",
-                    unsafe_allow_html=True)
-        px = latlon_to_px(click["lat"], click["lng"])
-        cA, cB = st.columns([1, 1.4])
-        if px is None:
-            cA.warning("Outside the mapped area.")
-        else:
-            r, c = px
-            su8, j = int(SUS[r, c]), int(NEAR[r, c])
-            if su8 == 255:
-                cA.markdown("<div class='insp-empty'><b>Not assessed</b><br>"
-                            "Ice, open water, or slope below 10°.</div>",
-                            unsafe_allow_html=True)
-            else:
-                su = su8 / 254.0
-                near, km = G.nearest_place(click["lat"], click["lng"], PLACES)
-                cA.markdown(
-                    f"<div style='margin-bottom:9px'>{T.chip(int(cls[r,c])-1)}</div>"
-                    + T.row("Latitude, longitude",
-                            f"{click['lat']:.4f}, {click['lng']:.4f}")
-                    + T.row("Nearest settlement",
-                            f"{near['label']} · {km:.0f} km" if near else "—")
-                    + T.row("Susceptibility", f"{su:.3f}")
-                    + T.row("Trigger (rain vs normal)", f"{tri_pts[j]:.2f}")
-                    + T.row("Hazard", f"{hz[r, c]:.3f}")
-                    + T.row("Rain that day", f"{rain[di, j]:.1f} mm"),
-                    unsafe_allow_html=True)
-                cB.caption("Hazard at the clicked point over the next 7 days")
-                cB.bar_chart(pd.DataFrame({
-                    "day": [datetime.fromisoformat(days[i]).strftime("%d %b")
-                            for i in fut],
-                    "hazard": [float(su * trig[i][j]) for i in fut]}
-                ).set_index("day"), height=200, color=T.ACCENT_2)
-                if st.button("Use this point as my location", key="use_click"):
-                    st.session_state.search = (f"{click['lat']:.4f}, "
-                                               f"{click['lng']:.4f}")
-                    st.rerun()
 
 
 # ═════════════════════════ VIEW: STATEWIDE ═══════════════════════════════════

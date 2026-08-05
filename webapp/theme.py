@@ -97,6 +97,22 @@ iframe{border-radius:14px; border:1px solid var(--line)!important;}
 .st-key-map_shell{overflow:hidden!important;}
 .st-key-map_shell::-webkit-scrollbar{display:none;}
 
+/* The click panel beside the map. Locked to the map's height so the two read
+   as one card; content taller than that scrolls INSIDE the panel rather than
+   stretching the row and leaving dead space next to the map. Unlike the map
+   shell this one keeps a scrollbar — it is the only cue that there is more
+   below the fold — but a thin, quiet one. */
+.st-key-click_shell{
+  background:rgba(13,19,27,.55); border:1px solid var(--line);
+  border-radius:14px; padding:12px 14px;
+}
+.st-key-click_shell::-webkit-scrollbar{width:7px;}
+.st-key-click_shell::-webkit-scrollbar-track{background:transparent;}
+.st-key-click_shell::-webkit-scrollbar-thumb{
+  background:var(--line); border-radius:4px;
+}
+.st-key-click_shell::-webkit-scrollbar-thumb:hover{background:#2f4258;}
+
 /* ---- brand ---- */
 .brand{display:flex; align-items:center; gap:11px; margin-bottom:4px;}
 .brand-logo{

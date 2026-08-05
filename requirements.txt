@@ -9,6 +9,6 @@ numpy>=1.26
 pandas>=2.1
 pillow>=10.0
 requests>=2.31
-streamlit>=1.40
+streamlit>=1.45      # accept_new_options on selectbox; keyed st.container
 folium>=0.17
 streamlit-folium>=0.23
