@@ -1,11 +1,17 @@
 # Dark theme to match the app's own palette, so there is no flash of a light
 # shell before the CSS loads.
 [theme]
+# Must match theme.py's palette or the shell paints in one identity and the
+# CSS repaints in another — a visible flash on every load. These are the
+# SlopeSense values: ink canvas, signal-cyan accent kept cool so it never
+# competes with the warm hazard ramp.
 base = "dark"
-primaryColor = "#f46d43"
-backgroundColor = "#0f1116"
-secondaryBackgroundColor = "#191c24"
-textColor = "#e6e8ec"
+primaryColor = "#2ee6d6"
+backgroundColor = "#0b0f14"
+secondaryBackgroundColor = "#111823"
+textColor = "#e5edf5"
+baseRadius = "0.9rem"
+borderColor = "#223044"
 
 [server]
 headless = true

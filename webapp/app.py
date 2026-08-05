@@ -26,6 +26,7 @@ from folium.plugins import FastMarkerCluster, Fullscreen, HeatMap, MiniMap
 from folium.raster_layers import ImageOverlay
 from streamlit_folium import st_folium
 
+import deck3d as D3
 import forecast as fc
 import geo as G
 import theme as T
@@ -192,9 +193,34 @@ def rgba_overlay(cls: np.ndarray, colors) -> np.ndarray:
     return out
 
 
-def base_map(zoom=7, center=None):
-    m = folium.Map(location=center or [(SOUTH + NORTH) / 2, (WEST + EAST) / 2],
-                   zoom_start=zoom, tiles=None, control_scale=True)
+@st.cache_data(show_spinner=False)
+def overlay_uri(img: np.ndarray) -> str:
+    """PNG data URI for the 3D view. Cached on the array: re-encoding the same
+    raster on every camera nudge would re-run PNG compression for nothing."""
+    return D3.png_data_uri(img)
+
+
+def base_map():
+    """The parts of the map that must NEVER change between reruns.
+
+    ⚠️ This is the whole trick behind the map not snapping back to the start
+    every time you touch a control. streamlit_folium identifies a map by
+    hashing its generated JavaScript. Same JS -> same component -> the browser
+    keeps the live Leaflet instance, with whatever the user panned and zoomed
+    to. Different JS -> a brand-new component, mounted fresh at zoom_start.
+
+    So the base map is built from FIXED arguments only — never from the
+    selected day, the chosen layer, or a searched location. Everything that
+    varies goes through overlay_group() and is pushed in as a feature group,
+    which streamlit_folium applies to the existing map without remounting it.
+
+    That also means the constructor's location/zoom are only ever the opening
+    view. Moving the map afterwards is done with st_folium(center=, zoom=).
+    """
+    m = folium.Map(location=[(SOUTH + NORTH) / 2, (WEST + EAST) / 2],
+                   zoom_start=7, tiles=None, control_scale=True,
+                   zoomSnap=0.5, zoomDelta=0.5,          # finer wheel steps
+                   zoomAnimation=True, fadeAnimation=True)
     # folium.Map(min_zoom=) is a no-op when tiles=None — it only reaches the
     # default tile layer, which we skip. Leaflet's own option must be set here
     # or scroll-out is unbounded and eventually shows repeated world copies.
@@ -204,14 +230,28 @@ def base_map(zoom=7, center=None):
     url, attr = T.BASEMAPS[basemap]
     folium.TileLayer(url, attr=attr, name="Base", control=False,
                      min_zoom=T.MAP_MIN_ZOOM, no_wrap=True).add_to(m)
+    # The label pane must exist on the BASE map: panes are Leaflet containers
+    # created at map setup, and a feature group cannot conjure one later.
+    folium.map.CustomPane("labels", z_index=650).add_to(m)
+    if show_labels:
+        folium.TileLayer(T.LABEL_TILES[basemap], attr=T.CARTO, name="Labels",
+                         pane="labels", control=False,
+                         min_zoom=T.MAP_MIN_ZOOM, no_wrap=True).add_to(m)
+    Fullscreen(position="topleft").add_to(m)
+    if show_minimap:
+        MiniMap(toggle_display=True, minimized=True).add_to(m)
     return m
 
 
-def finish_map(m, districts=False, marker=None):
-    """Vector layers, in draw order: mask, rivers, roads, boundaries, marker."""
+def overlay_group(img=None, districts=False, marker=None, inventory=True):
+    """Everything that changes — as ONE feature group, swapped in place.
+
+    Draw order matters and is the order things are added here: dimming mask,
+    raster overlay, rivers, roads, districts, state edge, inventory, marker.
+    """
+    fg = folium.FeatureGroup(name="layers")
     if bare:
-        Fullscreen(position="topleft").add_to(m)
-        return m
+        return fg
     if dim_outside and OUTSIDE:
         # Arunachal pinches to a narrow neck near 95E, so its two boundary
         # lines run close together and read as a stray line through the state.
@@ -221,73 +261,88 @@ def finish_map(m, districts=False, marker=None):
                        style_function=lambda _: {"fillColor": "#05070a",
                                                  "color": "#05070a",
                                                  "weight": 0, "fillOpacity": .80}
-                       ).add_to(m)
+                       ).add_to(fg)
+    if img is not None:
+        ImageOverlay(img, bounds=[[SOUTH, WEST], [NORTH, EAST]],
+                     opacity=opacity, name="Overlay").add_to(fg)
     if show_rivers and RIVERS:
         folium.GeoJson(RIVERS, name="Rivers",
                        style_function=lambda _: {"color": "#1d5fa8", "weight": 1.0,
-                                                 "opacity": .7}).add_to(m)
+                                                 "opacity": .7}).add_to(fg)
     if show_roads and ROADS:
         ink = T.ROAD_INK[basemap]
         folium.GeoJson(ROADS, name="Major roads",
                        style_function=lambda _: {"color": ink, "weight": 1.3,
                                                  "opacity": .85},
                        tooltip=folium.GeoJsonTooltip(["highway"], aliases=["Road:"])
-                       ).add_to(m)
+                       ).add_to(fg)
     if districts:
         folium.GeoJson(DISTRICTS, name="Districts",
                        style_function=lambda _: {"color": "#9fb3c8", "weight": .9,
                                                  "fill": False, "opacity": .55},
                        tooltip=folium.GeoJsonTooltip(["district"], aliases=[""])
-                       ).add_to(m)
+                       ).add_to(fg)
     # Casing first, then the bright edge on top. A single hairline over dark
     # terrain reads as a line drawn ACROSS the map; a cased edge reads as the
     # rim of a solid body, which is what stops Arunachal's Assam-facing border
     # looking like a defect.
     folium.GeoJson(BOUNDARY, name="State edge",
                    style_function=lambda _: {"color": "#020409", "weight": 6,
-                                             "opacity": .85, "fill": False}).add_to(m)
+                                             "opacity": .85, "fill": False}).add_to(fg)
     folium.GeoJson(BOUNDARY, name="State",
                    style_function=lambda _: {"color": T.BOUNDARY_INK[basemap],
-                                             "weight": 2.2, "fill": False}).add_to(m)
-    if inv_mode != "Off" and INVENTORY:
-        _add_inventory(m)
-    if show_labels:
-        # Labels ride in a pane ABOVE the overlay, or place names vanish under it.
-        folium.map.CustomPane("labels", z_index=650).add_to(m)
-        folium.TileLayer(T.LABEL_TILES[basemap], attr=T.CARTO, name="Labels",
-                         pane="labels", control=False,
-                         min_zoom=T.MAP_MIN_ZOOM, no_wrap=True).add_to(m)
+                                             "weight": 2.2, "fill": False}).add_to(fg)
+    if inventory and inv_mode != "Off" and INVENTORY:
+        _add_inventory(fg)
     if marker:
-        # Pulsing halo + pin: at zoom 11 a bare pin is easy to lose against a
-        # busy hazard overlay, and this is the one thing on the map the visitor
+        # Halo + pin: at zoom 11 a bare pin is easy to lose against a busy
+        # hazard overlay, and this is the one thing on the map the visitor
         # came to find.
         folium.CircleMarker(marker[:2], radius=13, color=T.ACCENT, weight=2,
                             fill=True, fill_color=T.ACCENT, fill_opacity=.16,
-                            tooltip=marker[2]).add_to(m)
+                            tooltip=marker[2]).add_to(fg)
         folium.Marker(marker[:2], tooltip=marker[2],
                       icon=folium.Icon(color="lightblue", icon="location-dot",
-                                       prefix="fa")).add_to(m)
-    Fullscreen(position="topleft").add_to(m)
-    if show_minimap:
-        MiniMap(toggle_display=True, minimized=True).add_to(m)
-    return m
+                                       prefix="fa")).add_to(fg)
+    return fg
 
 
-def _add_inventory(m):
+def _add_inventory(fg):
     """Every mapped landslide inside the state.
 
     Individual markers would stall the browser at this count, so: a heatmap for
     the density story, or FastMarkerCluster (which buckets client-side) when
     someone wants to drill into individual failures.
+
+    Both plugins carry their own JS. streamlit_folium collects those links by
+    walking the map AFTER the feature group has been attached, so they load
+    correctly even though the group is not part of the base map — verified
+    before relying on it.
     """
     pts = [(d["y"], d["x"]) for d in INVENTORY]
     if inv_mode == "Heatmap":
         HeatMap(pts, radius=8, blur=11, min_opacity=.35,
                 gradient={0.2: "#1e3a8a", 0.45: "#38bdf8",
                           0.7: "#fde047", 1.0: "#dc2626"},
-                name="Landslide density").add_to(m)
+                name="Landslide density").add_to(fg)
     else:
-        FastMarkerCluster(pts, name="Mapped landslides").add_to(m)
+        FastMarkerCluster(pts, name="Mapped landslides").add_to(fg)
+
+
+def fly_to(sel, zoom):
+    """center/zoom for st_folium — but ONLY when the target actually changed.
+
+    Passing the selected location every rerun would drag the map back the
+    instant someone panned away and then clicked a day button. Returning
+    (None, None) leaves the live map exactly where the user put it.
+    """
+    if not sel:
+        return None, None
+    sig = f"{sel['lat']:.4f},{sel['lon']:.4f},{zoom},{st.session_state.get('recentre', 0)}"
+    if sig == st.session_state.get("map_target"):
+        return None, None
+    st.session_state.map_target = sig
+    return (sel["lat"], sel["lon"]), zoom
 
 
 def map_head(title: str, note: str = "") -> None:
@@ -373,7 +428,7 @@ with st.sidebar:
                <div class="brand-tag">ARUNACHAL PRADESH · 7-DAY</div></div>
         </div>""", unsafe_allow_html=True)
     with icol:
-        with st.popover("ℹ️", use_container_width=True):
+        with st.popover("ℹ️", width="stretch"):
             st.markdown("""
 <div class="hero-eyebrow">Eastern Himalaya · Arunachal Pradesh</div>
 
@@ -387,7 +442,7 @@ failures, multiplied by how unusual this week's rain is for that exact place.
     for icon, label in VIEWS:
         active = st.session_state.view == label
         if st.button(f"{icon}  {label}", key=f"nav_{label}",
-                     use_container_width=True,
+                     width="stretch",
                      type="primary" if active else "secondary"):
             if not active:
                 # Rerun immediately: the other buttons in this same loop were
@@ -480,7 +535,7 @@ def day_strip(key: str, notes: list[str] | None = None):
             text = f"{lbl}\n{d.strftime('%d %b')}"
             if notes:
                 text += f"\n{notes[n]}"
-            if st.button(text, key=f"day_{key}_{i}", use_container_width=True,
+            if st.button(text, key=f"day_{key}_{i}", width="stretch",
                          type="primary" if i == st.session_state.day_i else "secondary"):
                 st.session_state.day_i = i
                 st.rerun()
@@ -552,7 +607,7 @@ def trigger_classes(tri_pts: np.ndarray) -> np.ndarray:
     return out
 
 
-def click_panel(click, cls, hz, tri_pts, di) -> None:
+def click_panel(click, cls, hz, tri_pts, di, note: str = "") -> None:
     """Details for the last-clicked map point, beside the map rather than below.
 
     It used to sit at the bottom of the page, so every click meant scrolling
@@ -572,6 +627,9 @@ def click_panel(click, cls, hz, tri_pts, di) -> None:
                         "unusual the rain is there, and the next seven days."
                         "</div>", unsafe_allow_html=True)
             return
+        if note:
+            st.markdown(f"<div class='caveat'>{note}</div>",
+                        unsafe_allow_html=True)
         px = latlon_to_px(click["lat"], click["lng"])
         if px is None:
             st.markdown("<div class='insp-empty'><b>Outside the mapped area</b>"
@@ -607,7 +665,7 @@ def click_panel(click, cls, hz, tri_pts, di) -> None:
             "hazard": [float(su * trig[i][j]) for i in fut]}
         ).set_index("day"), height=170, color=T.ACCENT_2)
         if st.button("Use this point as my location", key="use_click",
-                     use_container_width=True):
+                     width="stretch"):
             st.session_state.search = f"{click['lat']:.4f}, {click['lng']:.4f}"
             st.rerun()
 
@@ -634,23 +692,40 @@ if view == "Forecast":
 
     # ---- the map card, at the very top, exactly as SlopeSense v1 ---------- #
     with st.container(border=True):
-        h1, h2 = st.columns([1.15, 1], vertical_alignment="center")
+        h1, h2, h3 = st.columns([0.95, 1.15, 0.42],
+                                vertical_alignment="center")
         with h2:
             LAYERS = ["🗺️ Hazard", "🌧️ Rain trigger", "⛰️ Susceptibility"]
             layer = st.segmented_control("Layer", LAYERS, default=LAYERS[0],
                                          label_visibility="collapsed")
             layer = layer or LAYERS[0]
+        with h3:
+            dims = ["2D", "3D"]
+            dim = st.segmented_control("View", dims, default=dims[0],
+                                       label_visibility="collapsed",
+                                       help="3D drapes the same surface over "
+                                            "real terrain — landslides are a "
+                                            "slope phenomenon, and a flat map "
+                                            "is the one view that hides slope.")
+            dim = dim or dims[0]
 
         # Search row. `accept_new_options` is what lets a visitor type raw
         # coordinates — the gazetteer has 4,648 names but the state has far
         # more places than that, and someone standing on a road cut needs the
         # forecast for exactly where they are.
-        s1, s2 = st.columns([5, 1.15], vertical_alignment="bottom")
+        s1, s2, s3 = st.columns([5, 1.15, 0.95], vertical_alignment="bottom")
         with s2:
-            if st.button("📍 My location", use_container_width=True,
+            if st.button("📍 My location", width="stretch",
                          help="Ask the browser where you are."):
                 st.query_params["geo"] = "ask"
                 st.session_state.pop("search", None)
+                st.rerun()
+        with s3:
+            # The map is deliberately left wherever the user panned it, so this
+            # is the only way back to the selected place without re-picking it.
+            if st.button("⌖ Recentre", width="stretch",
+                         help="Snap the map back to the selected location."):
+                st.session_state.recentre = st.session_state.get("recentre", 0) + 1
                 st.rerun()
         with s1:
             options = [G.PROMPT] + [p["label"] for p in PLACES]
@@ -675,7 +750,7 @@ if view == "Forecast":
         with h1:
             title = {"🗺️ Hazard": "Hazard forecast", "🌧️ Rain trigger": "Rain vs normal",
                      "⛰️ Susceptibility": "Slope susceptibility"}[layer]
-            map_head(title, "scroll to zoom · click anywhere to inspect")
+            map_head(title, "" if dim == "3D" else "click anywhere to inspect")
 
         # Each button carries the outlook FOR THE SELECTED PLACE, so the number
         # beside a date is about somewhere a person actually is.
@@ -705,26 +780,49 @@ if view == "Forecast":
         cinfo, cmap = st.columns([1, 2.35], gap="medium")
 
         with cmap:
+            # Survives a 2D/3D switch: the panel keeps showing the last point
+            # inspected rather than blanking because the other map is on screen.
+            out = st.session_state.get("last_click_out")
+            img = None
+            if not bare:
+                if layer == LAYERS[0]:
+                    img = rgba_overlay(cls, T.CLASS_COLORS)
+                elif layer == LAYERS[1]:
+                    img = rgba_overlay(trigger_classes(tri_pts), TRIG_COLORS)
+                else:
+                    img = rgba_overlay(susceptibility_classes(), T.CLASS_COLORS)
+
             # Height-locked shell: switching layer must not collapse the card
             # and bounce the panels below it up for a frame.
             shell = st.container(height=T.MAP_H + 8, border=False, key="map_shell")
-            m = base_map(zoom=zoom, center=centre)
-            if not bare:
-                if layer == LAYERS[0]:
-                    img, names, colors = rgba_overlay(cls, T.CLASS_COLORS), T.CLASS_NAMES, T.CLASS_COLORS
-                elif layer == LAYERS[1]:
-                    img, names, colors = (rgba_overlay(trigger_classes(tri_pts), TRIG_COLORS),
-                                          TRIG_NAMES, TRIG_COLORS)
-                else:
-                    img, names, colors = (rgba_overlay(susceptibility_classes(), T.CLASS_COLORS),
-                                          T.CLASS_NAMES, T.CLASS_COLORS)
-                ImageOverlay(img, bounds=[[SOUTH, WEST], [NORTH, EAST]],
-                             opacity=opacity, name=layer).add_to(m)
-            finish_map(m, districts=show_districts, marker=marker)
-            with shell:
-                out = st_folium(m, height=T.MAP_H, use_container_width=True,
-                                returned_objects=["last_clicked"],
-                                key=f"fmap_{layer}")
+            if dim == "3D":
+                with shell:
+                    components.html(D3.html(
+                        basemap=basemap,
+                        overlay=None if img is None else overlay_uri(img),
+                        bounds=[WEST, SOUTH, EAST, NORTH],
+                        centre=centre or ((SOUTH + NORTH) / 2, (WEST + EAST) / 2),
+                        zoom=(zoom - 1.2) if sel else 6.4,
+                        opacity=opacity, boundary=BOUNDARY,
+                        edge_color=T.EDGE_RGB[basemap],
+                        marker=({"pos": [sel["lon"], sel["lat"]],
+                                 "tip": sel["label"]} if sel else None),
+                    ), height=T.MAP_H)
+            else:
+                m = base_map()
+                fg = overlay_group(img, districts=show_districts, marker=marker)
+                fly_c, fly_z = fly_to(sel, zoom)
+                with shell:
+                    # ⚠️ Stable key. Keying on the layer would rebuild the
+                    # component on every layer switch, which is exactly the
+                    # reset we are avoiding — the layer now travels in the
+                    # feature group instead.
+                    out = st_folium(m, height=T.MAP_H, use_container_width=True,
+                                    returned_objects=["last_clicked"],
+                                    feature_group_to_add=fg,
+                                    center=fly_c, zoom=fly_z, key="fmap")
+                if (out or {}).get("last_clicked"):
+                    st.session_state.last_click_out = out
             if bare:
                 legend_strip([], [])
             elif layer == LAYERS[1]:
@@ -741,7 +839,9 @@ if view == "Forecast":
                                   "outside Arunachal")
 
         with cinfo:
-            click_panel((out or {}).get("last_clicked"), cls, hz, tri_pts, di)
+            click_panel((out or {}).get("last_clicked"), cls, hz, tri_pts, di,
+                        note=("Showing your last 2D click — point inspection "
+                              "lives on the 2D map." if dim == "3D" else ""))
 
     # ---- the located forecast -------------------------------------------- #
     if geo_state == "ok" and user_pt and not user_inside:
@@ -843,7 +943,7 @@ if view == "Forecast":
                         "Rain": [f"{rain[i, j]:.0f} mm" for i in fut],
                         "Trigger": [f"{trig[i][j]:.2f}" for i in fut],
                         "Outlook": [T.CLASS_NAMES[int(x) - 1] for x in dcls]}),
-                        use_container_width=True, hide_index=True, height=280)
+                        width="stretch", hide_index=True, height=280)
 
 
 # ═════════════════════════ VIEW: STATEWIDE ═══════════════════════════════════
@@ -904,15 +1004,12 @@ elif view == "Statewide":
         map_head(f"Statewide hazard — {sel_day.strftime('%d %b')}",
                  "scroll to zoom · drag to pan")
         shell = st.container(height=T.MAP_H + 8, border=False, key="map_shell")
-        m = base_map(zoom=7)
-        if not bare:
-            ImageOverlay(rgba_overlay(cls, T.CLASS_COLORS),
-                         bounds=[[SOUTH, WEST], [NORTH, EAST]],
-                         opacity=opacity, name="Hazard").add_to(m)
-        finish_map(m, districts=show_districts)
+        m = base_map()
+        fg = overlay_group(None if bare else rgba_overlay(cls, T.CLASS_COLORS),
+                           districts=show_districts)
         with shell:
             st_folium(m, height=T.MAP_H, use_container_width=True,
-                      returned_objects=[], key="swmap")
+                      returned_objects=[], feature_group_to_add=fg, key="swmap")
         shares = [float((cls[assessed] == i).mean()) if assessed.any() else 0
                   for i in range(1, 6)]
         legend_strip(T.CLASS_NAMES, T.CLASS_COLORS, shares,
@@ -920,7 +1017,7 @@ elif view == "Statewide":
 
     st.markdown("<div class='eyebrow'>District outlook</div>", unsafe_allow_html=True)
     dt = district_table(cls.tobytes(), cls.shape, days[di])
-    st.dataframe(dt, use_container_width=True, hide_index=True, height=340,
+    st.dataframe(dt, width="stretch", hide_index=True, height=340,
                  column_config={"High+ %": st.column_config.ProgressColumn(
                      "High+ %", min_value=0, max_value=100, format="%.1f%%")})
     st.download_button("⬇️  District outlook (CSV)", dt.to_csv(index=False).encode(),
@@ -946,15 +1043,13 @@ elif view == "Susceptibility":
     with st.container(border=True):
         map_head("Statewide susceptibility surface", "scroll to zoom · drag to pan")
         shell = st.container(height=T.MAP_H + 8, border=False, key="map_shell")
-        m = base_map(zoom=7)
-        if not bare:
-            ImageOverlay(rgba_overlay(susceptibility_classes(), T.CLASS_COLORS),
-                         bounds=[[SOUTH, WEST], [NORTH, EAST]],
-                         opacity=opacity).add_to(m)
-        finish_map(m, districts=show_districts)
+        m = base_map()
+        fg = overlay_group(None if bare else
+                           rgba_overlay(susceptibility_classes(), T.CLASS_COLORS),
+                           districts=show_districts)
         with shell:
             st_folium(m, height=T.MAP_H, use_container_width=True,
-                      returned_objects=[], key="smap")
+                      returned_objects=[], feature_group_to_add=fg, key="smap")
         legend_strip(T.CLASS_NAMES, T.CLASS_COLORS,
                      note="Static — no rainfall in this layer")
 
@@ -966,7 +1061,7 @@ elif view == "Susceptibility":
             "Class": r["name"], "% of land": f"{100*r['area_frac']:.0f}%",
             "% of known landslides": f"{100*r['slide_frac']:.0f}%",
             "Concentration": f"{r['lift']:.1f}×"} for r in sr]),
-            use_container_width=True, hide_index=True)
+            width="stretch", hide_index=True)
         st.caption("Read the bottom row: the smallest, reddest sliver of the "
                    "state contains a large share of every landslide mapped there.")
 
@@ -990,15 +1085,17 @@ elif view == "Evidence":
             map_head("Where the landslides are",
                      "each point is a surveyed failure, not a model output")
             shell = st.container(height=T.MAP_H + 8, border=False, key="map_shell")
-            m = base_map(zoom=7)
+            m = base_map()
+            # This map IS the inventory, so it always draws the heatmap —
+            # independent of the sidebar's inventory control.
+            fg = overlay_group(None, districts=show_districts, inventory=False)
             HeatMap([(d["y"], d["x"]) for d in INVENTORY], radius=8, blur=11,
                     min_opacity=.35,
                     gradient={0.2: "#1e3a8a", 0.45: "#38bdf8",
-                              0.7: "#fde047", 1.0: "#dc2626"}).add_to(m)
-            finish_map(m, districts=show_districts)
+                              0.7: "#fde047", 1.0: "#dc2626"}).add_to(fg)
             with shell:
                 st_folium(m, height=T.MAP_H, use_container_width=True,
-                          returned_objects=[], key="emap")
+                          returned_objects=[], feature_group_to_add=fg, key="emap")
         st.caption("Turn on **Roads** in the sidebar — the clustering along the "
                    "road network is real, and it is partly physical (road cuts "
                    "over-steepen slopes) and partly a survey artefact (surveyors "
@@ -1032,7 +1129,7 @@ elif view == "Evidence":
          "Scale": f"{len(PLACES):,} entries", "Used for": "Location forecasts"},
     ])
     st.markdown("<div class='eyebrow'>Every source</div>", unsafe_allow_html=True)
-    st.dataframe(src, use_container_width=True, hide_index=True, height=440)
+    st.dataframe(src, width="stretch", hide_index=True, height=440)
 
     st.markdown("<div class='eyebrow'>The imbalance that shapes everything</div>",
                 unsafe_allow_html=True)
@@ -1085,7 +1182,7 @@ else:
         "How often it alerts": f"{100*o['alert_rate']:.1f}% of days",
         "Known landslides caught": f"{100*o['event_capture']:.0f}%",
         "Better than chance": f"{o['lift']:.1f}×"} for o in t["operating_points"]]),
-        use_container_width=True, hide_index=True)
+        width="stretch", hide_index=True)
     st.caption("Catching more means alerting more. No setting does both — that is "
                "a policy decision, not a modelling one.")
 

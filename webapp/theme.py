@@ -51,6 +51,14 @@ BOUNDARY_INK = {"Dark": ACCENT, "Satellite": ACCENT,
 ROAD_INK = {"Dark": "#93a7bd", "Satellite": "#e5e7eb",
             "Light": "#4a4a4a", "Terrain": "#4a4a4a"}
 
+
+def _rgb(hexc: str, alpha: int = 210) -> list[int]:
+    return [int(hexc[i:i + 2], 16) for i in (1, 3, 5)] + [alpha]
+
+
+# deck.gl takes colours as RGBA arrays, not hex — same boundary ink, other units.
+EDGE_RGB = {k: _rgb(v) for k, v in BOUNDARY_INK.items()}
+
 MAP_MIN_ZOOM = 6
 MAP_H = 430          # compact map viewport, matching SlopeSense v1
 MAP_H_SM = 360
