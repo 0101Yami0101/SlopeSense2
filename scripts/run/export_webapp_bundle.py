@@ -109,6 +109,33 @@ def main() -> None:
     lonp = (west + (np.arange(w) + 0.5) * dst_tf.a)[None, :].repeat(h, 0)
     latp = (north + (np.arange(h) + 0.5) * dst_tf.e)[:, None].repeat(w, 1)
 
+    # ── elevation, on the SAME lattice — this is what makes 3D possible ───
+    # The 3D view places each forecast cell at its true height. Draping a flat
+    # image onto a terrain mesh was tried and does not render in this deck.gl
+    # build, so the surface is drawn as points that already carry their own z.
+    # That needs a height for every cell, hence this layer.
+    #
+    # uint16 metres with 65535 as nodata: Arunachal tops out near 7,000 m, so
+    # whole metres are far finer than anything the view can show, and the file
+    # compresses to a fraction of a float32 raster.
+    dem_src = INTERIM / "terrain" / "dem_elev_m.tif"
+    if dem_src.exists():
+        with rasterio.open(dem_src) as s:
+            elev = np.full((h, w), np.nan, dtype=np.float32)
+            reproject(source=rasterio.band(s, 1), destination=elev,
+                      src_transform=s.transform, src_crs=s.crs,
+                      dst_transform=dst_tf, dst_crs="EPSG:4326",
+                      src_nodata=s.nodata, dst_nodata=np.nan,
+                      resampling=Resampling.average)
+        eok = np.isfinite(elev)
+        ez = np.full((h, w), 65535, dtype=np.uint16)
+        ez[eok] = np.clip(np.round(elev[eok]), 0, 65534).astype(np.uint16)
+        np.savez_compressed(OUT / "elevation.npz", elev=ez)
+        print(f"  elevation       {h}x{w}  {elev[eok].min():.0f}-{elev[eok].max():.0f} m  "
+              f"{(OUT/'elevation.npz').stat().st_size/1e6:.2f} MB")
+    else:
+        print(f"  [!] {dem_src.name} missing — 3D view will fall back to flat")
+
     # ── climatology → quantile breakpoints ───────────────────────────────
     if not (OM / "precip_mm.npy").exists():
         print("\n  [!] Open-Meteo climatology not fetched yet - run\n"

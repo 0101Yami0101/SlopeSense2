@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import re
 
+import numpy as np
+
 # ── coordinate parsing ───────────────────────────────────────────────────────
 # Accepts the forms people actually paste: "27.55, 94.21", "27.55 94.21",
 # "27.55N 94.21E", "lat 27.55 lon 94.21". Degrees/minutes/seconds is out of
@@ -240,3 +242,67 @@ def in_area(lat: float, lon: float, g: dict, pad: float = 0.0) -> bool:
     instead of a forecast for the nearest edge pixel."""
     return (g["south"] - pad <= lat <= g["north"] + pad
             and g["west"] - pad <= lon <= g["east"] + pad)
+
+
+# ── polygon -> grid mask ─────────────────────────────────────────────────────
+def _rings(geom):
+    """Every ring of a Polygon or MultiPolygon, outer and holes alike."""
+    t, c = geom["type"], geom["coordinates"]
+    if t == "Polygon":
+        return list(c)
+    if t == "MultiPolygon":
+        return [r for poly in c for r in poly]
+    return []
+
+
+def rasterize_polygon(geom, lons, lats):
+    """Which grid cells fall inside a polygon. Returns an (H, W) bool array.
+
+    `lons` and `lats` are the 1-D arrays of cell-centre coordinates.
+
+    Even-odd ray casting, vectorised over the grid: for each edge, flip the
+    state of every cell whose westward ray crosses it. XOR over ALL rings means
+    holes fall out for free — a cell inside both an outer ring and a hole gets
+    flipped twice and ends up outside.
+
+    ⚠️ Restricted to the polygon's bounding box first. Arunachal's districts are
+    a twentieth of the state each, so testing the whole 596x1227 grid against
+    every edge would be ~20x the work for the same answer.
+
+    Written by hand rather than pulled from rasterio or shapely on purpose:
+    those are the heavy geospatial dependencies this app exists without, and at
+    216 vertices for the largest district the maths is a dozen lines.
+    """
+    H, W = len(lats), len(lons)
+    out = np.zeros((H, W), dtype=bool)
+    rings = [np.asarray(r, dtype="float64") for r in _rings(geom)]
+    rings = [r for r in rings if len(r) >= 3]
+    if not rings:
+        return out
+
+    allpts = np.vstack(rings)
+    # Grid rows run north to south, so the row window is found from the top.
+    c0 = int(np.searchsorted(lons, allpts[:, 0].min()) - 1)
+    c1 = int(np.searchsorted(lons, allpts[:, 0].max()) + 1)
+    r0 = int(np.searchsorted(-lats, -allpts[:, 1].max()) - 1)
+    r1 = int(np.searchsorted(-lats, -allpts[:, 1].min()) + 1)
+    c0, c1 = max(c0, 0), min(c1, W)
+    r0, r1 = max(r0, 0), min(r1, H)
+    if c1 <= c0 or r1 <= r0:
+        return out
+
+    X, Y = np.meshgrid(lons[c0:c1], lats[r0:r1])
+    inside = np.zeros(X.shape, dtype=bool)
+    for r in rings:
+        x1, y1 = r[:-1, 0], r[:-1, 1]
+        x2, y2 = r[1:, 0], r[1:, 1]
+        for a, b, c, d in zip(x1, y1, x2, y2):
+            if b == d:                       # horizontal edge: no crossing
+                continue
+            straddles = (b > Y) != (d > Y)
+            if not straddles.any():
+                continue
+            xint = a + (Y - b) * (c - a) / (d - b)
+            inside ^= straddles & (X < xint)
+    out[r0:r1, c0:c1] = inside
+    return out

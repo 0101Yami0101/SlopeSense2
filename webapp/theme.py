@@ -233,6 +233,11 @@ div[data-testid="stExpander"] > details{
 .lg b{color:var(--dim);font-weight:600;font-variant-numeric:tabular-nums;}
 .lg-note{font-size:.74rem;color:var(--dim);margin-left:auto;}
 
+.strip-label{font-size:.74rem;color:var(--mut);margin:2px 0 7px;}
+.strip-label b{color:var(--txt);font-weight:600;}
+.insp-place{font-family:'Sora',sans-serif;font-weight:700;font-size:1rem;
+  color:var(--txt);margin-bottom:9px;line-height:1.25;}
+
 /* ---- inspector ---- */
 .insp-empty{padding:26px 18px;text-align:center;color:var(--dim);font-size:.86rem;
   border:1px dashed var(--line);border-radius:14px;background:rgba(17,24,35,.5);}
