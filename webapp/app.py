@@ -217,10 +217,16 @@ def base_map():
     That also means the constructor's location/zoom are only ever the opening
     view. Moving the map afterwards is done with st_folium(center=, zoom=).
     """
+    # Whole-number zoom only. zoomSnap/zoomDelta of 0.5 were tried here as a
+    # "finer wheel steps" nicety and removed again: at a half step Leaflet does
+    # not redraw, it CSS-scales what it already painted, which puts a second
+    # resampling pass on top of the overlay for no real benefit.
+    #
+    # ⚠️ That was NOT the cause of the smeared overlay — see pixelated=True on
+    # the st_folium calls for the actual fix. Recorded here because the two
+    # look alike and it is an easy wrong conclusion to reach twice.
     m = folium.Map(location=[(SOUTH + NORTH) / 2, (WEST + EAST) / 2],
-                   zoom_start=7, tiles=None, control_scale=True,
-                   zoomSnap=0.5, zoomDelta=0.5,          # finer wheel steps
-                   zoomAnimation=True, fadeAnimation=True)
+                   zoom_start=7, tiles=None, control_scale=True)
     # folium.Map(min_zoom=) is a no-op when tiles=None — it only reaches the
     # default tile layer, which we skip. Leaflet's own option must be set here
     # or scroll-out is unbounded and eventually shows repeated world copies.
@@ -817,7 +823,7 @@ if view == "Forecast":
                     # component on every layer switch, which is exactly the
                     # reset we are avoiding — the layer now travels in the
                     # feature group instead.
-                    out = st_folium(m, height=T.MAP_H, use_container_width=True,
+                    out = st_folium(m, height=T.MAP_H, use_container_width=True, pixelated=True,
                                     returned_objects=["last_clicked"],
                                     feature_group_to_add=fg,
                                     center=fly_c, zoom=fly_z, key="fmap")
@@ -1008,7 +1014,7 @@ elif view == "Statewide":
         fg = overlay_group(None if bare else rgba_overlay(cls, T.CLASS_COLORS),
                            districts=show_districts)
         with shell:
-            st_folium(m, height=T.MAP_H, use_container_width=True,
+            st_folium(m, height=T.MAP_H, use_container_width=True, pixelated=True,
                       returned_objects=[], feature_group_to_add=fg, key="swmap")
         shares = [float((cls[assessed] == i).mean()) if assessed.any() else 0
                   for i in range(1, 6)]
@@ -1048,7 +1054,7 @@ elif view == "Susceptibility":
                            rgba_overlay(susceptibility_classes(), T.CLASS_COLORS),
                            districts=show_districts)
         with shell:
-            st_folium(m, height=T.MAP_H, use_container_width=True,
+            st_folium(m, height=T.MAP_H, use_container_width=True, pixelated=True,
                       returned_objects=[], feature_group_to_add=fg, key="smap")
         legend_strip(T.CLASS_NAMES, T.CLASS_COLORS,
                      note="Static — no rainfall in this layer")
@@ -1094,7 +1100,7 @@ elif view == "Evidence":
                     gradient={0.2: "#1e3a8a", 0.45: "#38bdf8",
                               0.7: "#fde047", 1.0: "#dc2626"}).add_to(fg)
             with shell:
-                st_folium(m, height=T.MAP_H, use_container_width=True,
+                st_folium(m, height=T.MAP_H, use_container_width=True, pixelated=True,
                           returned_objects=[], feature_group_to_add=fg, key="emap")
         st.caption("Turn on **Roads** in the sidebar — the clustering along the "
                    "road network is real, and it is partly physical (road cuts "
