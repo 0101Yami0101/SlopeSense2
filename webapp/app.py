@@ -125,6 +125,13 @@ def _ghost_tile() -> None:
 
 
 if product is None:
+    # Raised directly (no click to arm) only on the very first landing this
+    # session — every later visit gets here via arm_home()'s click-triggered
+    # overlay instead, which is already up by the time this line runs.
+    if "_landed_once" not in st.session_state:
+        st.session_state["_landed_once"] = True
+        splash.cold_start()
+
     # ⚠️ The whole landing composition sits inside ONE narrower, centred
     # column — key="land_wrap" gets styled straight on the real Streamlit
     # container (the same st-key trick as backbone_strip below), which both
@@ -138,12 +145,16 @@ if product is None:
             "<span>Arunachal Pradesh</span></div></div>", unsafe_allow_html=True)
 
         mains = [p for p in P.REGISTRY if p.kind == "product"]
-        cols = st.columns(len(mains) + 1, gap="medium")
-        for col, p in zip(cols, mains):
-            with col:
-                _tile(p)
-        with cols[-1]:
-            _ghost_tile()
+        # Own key, distinct from land_wrap, purely so the entry-animation CSS
+        # in theme.py can stagger THIS row's columns without also catching the
+        # backbone strip's internal two-column layout below.
+        with st.container(border=False, key="land_tiles"):
+            cols = st.columns(len(mains) + 1, gap="medium")
+            for col, p in zip(cols, mains):
+                with col:
+                    _tile(p)
+            with cols[-1]:
+                _ghost_tile()
 
         bones = [p for p in P.REGISTRY if p.kind == "foundation"]
         if bones:
@@ -168,9 +179,14 @@ if product is None:
                                  width="stretch"):
                         _open(bone.slug)
 
-    # Arm the click-to-cover overlay. Must come AFTER the tiles exist, since
-    # the listener reads the module's name and accent out of the tile it was
-    # clicked in.
+    # Take down whichever overlay got this render here — cold_start() above,
+    # or arm_home() from inside a module — and restart the entry animation
+    # clean now that it is actually visible. Harmless if neither fired; there
+    # is then no #hip-splash node and nothing underneath needs restarting.
+    splash.dismiss_landing()
+    # Arm the click-to-cover overlay for the trip back IN. Must come AFTER the
+    # tiles exist, since the listener reads the module's name and accent out
+    # of the tile it was clicked in.
     splash.arm()
     st.stop()
 
@@ -211,6 +227,7 @@ with st.sidebar:
                         st.rerun()
     if st.button("← All modules", key="nav_home", width="stretch"):
         _open(None)
+    splash.arm_home()
     st.divider()
 
 # ⚠️ try/finally, not a plain call afterwards. Several views call st.stop()

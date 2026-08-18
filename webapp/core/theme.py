@@ -477,6 +477,26 @@ div[data-testid="stExpander"] > details{
   font-weight:700;color:var(--txt);line-height:1.2;}
 .backbone-strip-tag{color:var(--dim);font-size:.78rem;margin-top:1px;}
 .st-key-backbone_strip .stButton button{min-height:2.3rem;}
+
+/* Entry animation — the landing block fades and lifts in on every render (it
+   is rebuilt from scratch each time, whether that is the first visit of the
+   session or a click back from a module), so a little motion belongs here
+   without turning into a flicker on every module rerun elsewhere in the app.
+   Header first, tiles staggered left to right, the backbone strip last. */
+@keyframes landIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.st-key-land_wrap .land-head{animation:landIn .5s ease-out both;}
+.st-key-land_tiles [data-testid="stHorizontalBlock"]>div{
+  animation:landIn .5s ease-out both;animation-delay:.08s;}
+.st-key-land_tiles [data-testid="stHorizontalBlock"]>div:nth-child(2){animation-delay:.14s;}
+.st-key-land_tiles [data-testid="stHorizontalBlock"]>div:nth-child(3){animation-delay:.20s;}
+.st-key-land_wrap .land-foot-label,.st-key-land_wrap .st-key-backbone_strip{
+  animation:landIn .5s ease-out both;animation-delay:.28s;}
+@media (prefers-reduced-motion: reduce){
+  .st-key-land_wrap .land-head,
+  .st-key-land_tiles [data-testid="stHorizontalBlock"]>div,
+  .st-key-land_wrap .land-foot-label,.st-key-land_wrap .st-key-backbone_strip{
+    animation:none;}
+}
 </style>
 """
 
