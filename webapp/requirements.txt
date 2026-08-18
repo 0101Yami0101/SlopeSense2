@@ -1,6 +1,8 @@
-# App-only dependencies. The deployed app reads the ~0.4 MB bundle in assets/
+# App-only dependencies. The deployed app reads the ~4.4 MB bundle in assets/
 # and needs none of the geospatial or ML stack — no rasterio, geopandas,
-# lightgbm or pysheds. That is what lets it run on a free 1 GB host.
+# lightgbm, scikit-image or pysheds. That is what lets it run on a free 1 GB
+# host, and it stayed true when FloodSense was added: its terrain analysis runs
+# offline in scripts/build/ and ships as plain numpy arrays.
 #
 # folium/streamlit-folium ARE pure Python (no GDAL), so the interactive map
 # costs nothing in host compatibility. An earlier build left them out and

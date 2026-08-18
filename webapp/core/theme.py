@@ -194,9 +194,18 @@ div[data-testid="stVerticalBlockBorderWrapper"]{
   background:linear-gradient(180deg,rgba(22,31,44,.92),rgba(17,24,35,.92));
   border-radius:18px;
 }
+/* ⚠️ min-height, not height. Measured on every page that uses st.metric(): a
+   card with a delta line is 110px tall, one without is 85px — the SAME
+   defect on SlopeSense, FloodSense and Data Backbone, any time a row mixes
+   metrics that carry a delta with ones that don't. min-height fixes the row
+   without clipping a metric that ever needs more room than this. Width is
+   NOT hardcoded here: st.columns() already gives every metric in a row an
+   equal share, and a fixed pixel width would only be correct for one
+   specific column count and break every other page's layout. */
 [data-testid="stMetric"]{
   background:linear-gradient(180deg,var(--panel-2),var(--panel));
   border:1px solid var(--line);border-radius:16px;padding:13px 16px;
+  min-height:118px;
 }
 [data-testid="stMetricLabel"] p{
   font-size:.68rem!important;font-weight:600!important;text-transform:uppercase;
@@ -216,6 +225,17 @@ div[data-testid="stExpander"] > details{
 }
 [data-testid="stSelectbox"] div[data-baseweb="select"] > div:hover{
   border-color:var(--accent)!important;
+}
+
+/* A disabled segmented control (the parked 3D toggle). Muted enough to read
+   as unavailable, but the active option stays legible — a control where
+   nothing looks selected reads as broken rather than as coming soon. */
+[data-testid="stSegmentedControl"] button:disabled{
+  opacity:.45; cursor:not-allowed;
+}
+[data-testid="stSegmentedControl"] button:disabled[aria-checked="true"],
+[data-testid="stSegmentedControl"] button:disabled[kind="segmented_controlActive"]{
+  opacity:.8; color:var(--txt)!important;
 }
 
 /* ---- map card ---- */
@@ -278,6 +298,185 @@ div[data-testid="stExpander"] > details{
 .app-footer{margin-top:30px;padding-top:15px;border-top:1px solid var(--line);
   color:var(--dim);font-size:.78rem;display:flex;gap:14px;flex-wrap:wrap;}
 .app-footer b{color:var(--mut);}
+
+/* ---- architecture diagram (Data Backbone → Pipeline) ---- */
+/* Five lanes left to right, then the feedback lane underneath. The design
+   carries two messages at once and must not blur them:
+     SHAPE  — sources funnel into one hub, the hub fans out to consumers, and
+              the bottom lane closes the circle.
+     STATE  — solid nodes exist; DASHED and dimmed nodes are planned.
+   Everything numeric inside a built node is measured off the shipped bundle.
+   Full write-up: docs/design/PLATFORM_ARCHITECTURE.md */
+.arch{border:1px solid var(--line);border-radius:16px;
+  padding:18px 18px 14px;background:var(--panel);margin:4px 0 14px;}
+.arch-flow{display:flex;align-items:flex-start;justify-content:center;
+  gap:4px;flex-wrap:wrap;}
+/* Equal-width lanes: flex-basis 0 so all five divide the row evenly rather
+   than sizing to their own content, which is what made the columns drift out
+   of line against each other. */
+.arch-lane{display:flex;flex-direction:column;gap:7px;
+  flex:1 1 0;min-width:148px;}
+.arch-lname{display:flex;align-items:center;gap:6px;font-size:.66rem;
+  font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--dim);height:20px;}
+.arch-lic{font-size:13px;color:var(--mut);}
+/* ⚠️ Fixed height on every node, not padding alone. Node text varies from
+   "Align" to "External archives" and a planned node carries an extra pill —
+   left to size themselves, boxes in neighbouring lanes ended up at different
+   heights and the rows stopped reading as rows. Centring the content inside
+   a fixed box keeps every lane on the same rhythm no matter what it says.
+   Shorter than it was: the stat line under the name is gone, so a box only
+   ever holds one short line now — and there is no hover state any more,
+   since there is nothing left to reveal on hover. */
+.arch-node{border:1px solid var(--line);border-radius:11px;
+  padding:6px 11px;background:var(--panel-2);
+  height:48px;display:flex;flex-direction:column;justify-content:center;
+  overflow:hidden;}
+.arch-nn{font-family:'Sora',sans-serif;font-size:.82rem;font-weight:700;
+  color:var(--txt);line-height:1.2;display:flex;align-items:center;
+  gap:6px;flex-wrap:wrap;}
+.arch-nd{font-size:.69rem;color:var(--dim);margin-top:3px;line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* A product node wears its own module's accent — the same colour the landing
+   tile and that module's sidebar use, so the eye connects them. */
+.arch-node.arch-prod{border-color:color-mix(in srgb,var(--nc) 40%,var(--line));
+  background:linear-gradient(160deg,color-mix(in srgb,var(--nc) 11%,
+             transparent),transparent 72%),var(--panel-2);}
+.arch-node.arch-prod .arch-nd{color:var(--nc);font-weight:600;}
+/* Planned — dashed, dimmed, and marked. Three signals, because this is the
+   one distinction the page cannot afford to have missed. The mark is a
+   glyph now, not the word "planned" spelled out — the diagram reads as a
+   picture; the legend beneath it is the one place that still spells out
+   what the glyph means. */
+.arch-node.arch-plan{border-style:dashed;background:transparent;opacity:.62;}
+.arch-node.arch-plan .arch-nn{color:var(--mut);}
+.arch-tag{font-size:.74rem;line-height:1;color:#ffd08a;
+  background:rgba(255,176,32,.15);border:1px solid rgba(255,176,32,.32);
+  padding:2px 6px;border-radius:999px;white-space:nowrap;}
+/* Roughly level with the middle of the FIRST node in each lane — nodes got
+   shorter once their stat line was dropped, so this moved up to match. */
+.arch-arrow{align-self:flex-start;font-size:19px;color:var(--dim);
+  margin-top:36px;flex-shrink:0;}
+/* The return path. Full width, pointing back the other way, so "loop" is
+   legible as a shape rather than something to read. */
+.arch-loop{display:flex;align-items:center;gap:11px;margin-top:13px;
+  border:1px dashed var(--line);border-radius:11px;padding:9px 14px;}
+.arch-loop-arrow{color:var(--accent-2);font-size:13px;}
+.arch-loop-name{font-family:'Sora',sans-serif;font-size:.82rem;
+  font-weight:700;color:var(--mut);flex:1;}
+.arch-legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  margin-top:12px;padding-top:10px;border-top:1px solid var(--line);
+  font-size:.7rem;color:var(--dim);}
+.arch-legend i{display:inline-block;width:22px;height:0;vertical-align:middle;
+  margin-right:7px;}
+.arch-legend .lg-built{border-top:2px solid var(--mut);}
+.arch-legend .lg-plan{border-top:2px dashed var(--dim);}
+.arch-hint{margin-left:auto;font-style:italic;}
+
+/* ---- landing page: compact, one screen, no scrolling ---- */
+/* Each tile carries its module's accent through --tile, set inline, so the
+   colour comes from the registry rather than from a rule per module here.
+   Adding a fourth module must not mean adding a fourth CSS block. */
+/* The narrower centred column everything else sits inside. min-height ties
+   to the viewport so a short composition centres vertically too, rather than
+   hugging the top-left corner of a much taller page. The 170px subtracted is
+   the block-container's own top/bottom padding plus Streamlit's toolbar —
+   measured, not guessed, so the block does not overshoot into a scrollbar. */
+.st-key-land_wrap{display:flex!important;flex-direction:column!important;
+  justify-content:center!important;min-height:calc(100vh - 170px)!important;
+  max-width:1000px!important;margin:0 auto!important;}
+
+/* ---- in-page spinners (e.g. "Fetching live rainfall…") ---- */
+/* Streamlit's default is a bare line of grey text. This makes it a card that
+   belongs to the design. The module-open OVERLAY below overrides it. */
+[data-testid="stSpinner"]{
+  background:linear-gradient(180deg,var(--panel-2),var(--panel));
+  border:1px solid var(--line);border-radius:16px;
+  padding:20px 30px;box-shadow:0 12px 34px rgba(0,0,0,.38);
+}
+[data-testid="stSpinner"] [data-testid="stMarkdownContainer"] p{
+  font-family:'Sora',sans-serif;font-size:1.05rem;font-weight:700;
+  color:var(--txt);margin:0;
+}
+[data-testid="stSpinnerIcon"]{
+  width:22px!important;height:22px!important;
+  border-width:3px!important;color:var(--accent)!important;
+}
+
+/* ⚠️ The module-opening splash is NOT styled here. It is an overlay the
+   browser injects on the click itself, outside Streamlit's element tree, and
+   it carries its own CSS — see core/splash.py for why it cannot be done from
+   Python. Nothing in this file should try to reproduce it. */
+
+.land-head{display:flex;align-items:center;justify-content:center;
+  gap:12px;margin:2px 0 22px;}
+.land-logo{width:38px;height:38px;border-radius:11px;display:grid;
+  place-items:center;font-size:19px;color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);
+  flex-shrink:0;}
+.land-title{font-family:'Sora',sans-serif;font-size:1.5rem;font-weight:700;
+  letter-spacing:-.02em;color:var(--txt);line-height:1.15;}
+.land-title span{display:block;font-family:'Inter',sans-serif;
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;color:var(--mut);
+  text-transform:uppercase;margin-top:2px;}
+
+/* Module tiles — compact: icon, name, one-line tag, status pill. No blurbs. */
+.tile{position:relative;border:1px solid var(--line);border-radius:15px;
+  padding:20px 20px 18px;background:
+    linear-gradient(160deg,color-mix(in srgb,var(--tile) 9%,transparent),
+                    transparent 62%),var(--panel);
+  height:120px;overflow:hidden;}
+.tile::before{content:'';position:absolute;inset:0 0 auto 0;height:3px;
+  background:var(--tile);opacity:.9;}
+.tile-top{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;}
+.tile-icon{width:32px;height:32px;border-radius:9px;display:grid;
+  place-items:center;font-size:16px;color:var(--tile);
+  background:color-mix(in srgb,var(--tile) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--tile) 30%,transparent);}
+.tile-name{font-family:'Sora',sans-serif;font-size:1.08rem;font-weight:700;
+  letter-spacing:-.015em;color:var(--txt);line-height:1.2;}
+.tile-tag{color:var(--mut);font-size:.78rem;margin-top:3px;}
+.tile-pill{font-size:.62rem;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;padding:3px 8px;border-radius:999px;}
+.tile-pill.live{color:#7ef0c8;background:rgba(46,230,214,.12);
+  border:1px solid rgba(46,230,214,.32);}
+.tile-pill.wip{color:#ffd08a;background:rgba(255,176,32,.12);
+  border:1px solid rgba(255,176,32,.30);}
+/* The "more coming" tile: dashed, dimmer, no accent bleed — reads as an empty
+   slot, not a fourth real module competing with the other two. */
+.tile-ghost{border:1px dashed var(--line);background:transparent;
+  display:flex;flex-direction:column;justify-content:center;
+  align-items:center;text-align:center;opacity:.55;}
+.tile-ghost::before{display:none;}
+.tile-ghost .tile-icon{background:transparent;border:1px dashed var(--dim);
+  color:var(--dim);margin-bottom:6px;}
+.tile-ghost .tile-name{font-size:.92rem;color:var(--mut);}
+.tile-ghost .tile-tag{font-size:.72rem;}
+/* The button belongs to the tile above it, so close the gap Streamlit leaves
+   between the two blocks. */
+[class*="st-key-tile_"] .stButton{margin-top:-6px;}
+[class*="st-key-tile_"] .stButton button{border-radius:0 0 13px 13px;
+  min-height:2.1rem;padding:2px 8px;}
+
+/* Data Backbone: a horizontal strip below the tiles, not a peer card — it is
+   the foundation the modules stand on, not a third choice beside them.
+   Styled straight on the real st.container (key="backbone_strip"), the same
+   trick as .st-key-click_shell — one element, so its own button sits inline
+   instead of stacking below like the tiles above it. */
+.land-foot-label{color:var(--dim);font-size:.7rem;text-align:center;
+  letter-spacing:.08em;text-transform:uppercase;margin:18px 0 9px;}
+.st-key-backbone_strip{border:1px solid var(--line)!important;
+  border-radius:13px!important;background:var(--panel-2)!important;
+  padding:14px 18px!important;}
+.backbone-inline{display:flex;align-items:center;gap:11px;}
+.backbone-inline .tile-icon{width:30px;height:30px;font-size:15px;
+  flex-shrink:0;}
+.backbone-strip-name{font-family:'Sora',sans-serif;font-size:.96rem;
+  font-weight:700;color:var(--txt);line-height:1.2;}
+.backbone-strip-tag{color:var(--dim);font-size:.78rem;margin-top:1px;}
+.st-key-backbone_strip .stButton button{min-height:2.3rem;}
 </style>
 """
 

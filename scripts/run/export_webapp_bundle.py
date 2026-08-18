@@ -1,6 +1,8 @@
 """Export the small bundle the deployed web app reads.
 
-Output: webapp/assets/   (~4 MB, committed to git)
+Output: webapp/assets/base/       shared geography, every module reads it
+        webapp/assets/landslide/  SlopeSense model output
+        (~4 MB total, committed to git)
 
 ════════════════════════════════════════════════════════════════════════════
 THE DEPLOYED APP NEVER RUNS THE PIPELINE
@@ -54,7 +56,17 @@ from common import (BOUNDARIES, EXPOSURE, HYDROLOGY, INTERIM, LABELS,
 
 warnings.filterwarnings("ignore")
 
-OUT = ROOT / "webapp" / "assets"
+# Two bundles, and the split is the platform's whole shape. `base` is shared
+# geography every module draws — one grid, one boundary, one gazetteer, so two
+# hazards can never disagree about where Arunachal is. `landslide` is
+# SlopeSense's own model output. A flood module gets assets/flood/ beside it.
+ASSETS = ROOT / "webapp" / "assets"
+BASE = ASSETS / "base"
+OUT = ASSETS / "landslide"
+# ⚠️ points.json and clim_quantiles.npz live in BASE, not here. Rainfall is
+# the one input BOTH hazards read — the landslide trigger and the flood
+# catchment signal are the same 97 points against the same climatology.
+# Filing them under one hazard would make the other import from it.
 OM = INTERIM / "rainfall_om"
 DOWNSAMPLE = 5                     # 100 m -> 500 m
 N_Q = 101                          # percentile breakpoints
@@ -73,6 +85,7 @@ def rolling(a: np.ndarray, w: int) -> np.ndarray:
 
 
 def main() -> None:
+    BASE.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     print("Exporting web app bundle")
 
@@ -130,7 +143,7 @@ def main() -> None:
         eok = np.isfinite(elev)
         ez = np.full((h, w), 65535, dtype=np.uint16)
         ez[eok] = np.clip(np.round(elev[eok]), 0, 65534).astype(np.uint16)
-        np.savez_compressed(OUT / "elevation.npz", elev=ez)
+        np.savez_compressed(BASE / "elevation.npz", elev=ez)
         print(f"  elevation       {h}x{w}  {elev[eok].min():.0f}-{elev[eok].max():.0f} m  "
               f"{(OUT/'elevation.npz').stat().st_size/1e6:.2f} MB")
     else:
@@ -153,8 +166,8 @@ def main() -> None:
             roll = rolling(P, wdw)[mons]
             qs[f] = np.nanpercentile(roll, np.linspace(0, 100, N_Q),
                                      axis=0).astype(np.float32)
-        np.savez_compressed(OUT / "clim_quantiles.npz", **qs)
-        (OUT / "points.json").write_text(json.dumps(pts, indent=2))
+        np.savez_compressed(BASE / "clim_quantiles.npz", **qs)
+        (BASE / "points.json").write_text(json.dumps(pts, indent=2))
         print(f"  clim_quantiles  {N_Q} breakpoints x {P.shape[1]} points x "
               f"{len(FEATURES)} feats  "
               f"{(OUT/'clim_quantiles.npz').stat().st_size/1e6:.2f} MB")
@@ -179,7 +192,7 @@ def main() -> None:
     d = d[["NAME_2", "geometry"]].dissolve(by="NAME_2").reset_index()
     d["geometry"] = d.geometry.simplify(0.003)
     d.rename(columns={"NAME_2": "district"}).to_file(
-        OUT / "districts.geojson", driver="GeoJSON")
+        BASE / "districts.geojson", driver="GeoJSON")
 
     # ── state outline ────────────────────────────────────────────────────
     # GADM splits Arunachal by POLITICAL STATUS, not administration:
@@ -204,7 +217,7 @@ def main() -> None:
         outline = merged
         src = "GADM union — fallback, will show the NE notch"
     gpd.GeoDataFrame(geometry=[outline.simplify(0.0015)], crs="EPSG:4326"
-                     ).to_file(OUT / "boundary.geojson", driver="GeoJSON")
+                     ).to_file(BASE / "boundary.geojson", driver="GeoJSON")
     print(f"  districts {len(d)}   outline: {src}")
     print(f"    display area {outline.area:.3f} vs analysis extent {merged.area:.3f} "
           f"— the difference is high northern ground we do not assess anyway")
@@ -225,7 +238,7 @@ def main() -> None:
         r = gpd.clip(r, merged)
         r = r[~r.geometry.is_empty & r.geometry.notna()]
         r["geometry"] = r.geometry.simplify(0.001)
-        r.to_file(OUT / "roads.geojson", driver="GeoJSON")
+        r.to_file(BASE / "roads.geojson", driver="GeoJSON")
         print(f"  roads      {len(r):,} inside the state "
               f"(clipped from {before:,} in the bbox)  "
               f"{(OUT/'roads.geojson').stat().st_size/1e6:.2f} MB")
@@ -241,7 +254,7 @@ def main() -> None:
         rv = gpd.clip(rv, merged)
         rv = rv[~rv.geometry.is_empty & rv.geometry.notna()]
         rv["geometry"] = rv.geometry.simplify(0.002)
-        rv.to_file(OUT / "rivers.geojson", driver="GeoJSON")
+        rv.to_file(BASE / "rivers.geojson", driver="GeoJSON")
         print(f"  rivers     {len(rv):,} inside the state "
               f"(clipped from {before:,})  "
               f"{(OUT/'rivers.geojson').stat().st_size/1e6:.2f} MB")
@@ -254,7 +267,7 @@ def main() -> None:
     from shapely.geometry import box
     outer = box(west - 4, south - 4, east + 4, north + 4)
     gpd.GeoDataFrame(geometry=[outer.difference(outline)], crs="EPSG:4326"
-                     ).to_file(OUT / "outside_mask.geojson", driver="GeoJSON")
+                     ).to_file(BASE / "outside_mask.geojson", driver="GeoJSON")
     print(f"  outside_mask  dims everything beyond the state")
 
     # ── settlements: a search index, not a map layer ─────────────────────
@@ -266,7 +279,7 @@ def main() -> None:
         towns = [{"n": str(nm), "y": round(float(g.y), 4), "x": round(float(g.x), 4)}
                  for nm, g in zip(s_[namecol], s_.geometry)
                  if str(nm) not in ("nan", "None", "")]
-        (OUT / "towns.json").write_text(json.dumps(towns, separators=(",", ":")))
+        (BASE / "towns.json").write_text(json.dumps(towns, separators=(",", ":")))
         print(f"  towns      {len(towns):,} searchable  "
               f"{(OUT/'towns.json').stat().st_size/1e6:.2f} MB")
 
@@ -350,10 +363,14 @@ def main() -> None:
             "class_breaks_pct": [50, 75, 90, 97],
             "class_names": ["Very Low", "Low", "Moderate", "High", "Very High"],
             "class_colors": ["#1a9850", "#a6d96a", "#fee08b", "#f46d43", "#a50026"]}
-    (OUT / "grid.json").write_text(json.dumps(grid, indent=2))
+    (BASE / "grid.json").write_text(json.dumps(grid, indent=2))
 
-    total = sum(p.stat().st_size for p in OUT.iterdir() if p.is_file())
-    print(f"\n  bundle total: {total/1e6:.2f} MB  -> {OUT}")
+    for tag, d in (("base", BASE), ("landslide", OUT)):
+        sz = sum(p.stat().st_size for p in d.iterdir() if p.is_file())
+        print(f"  {tag:<10} {sz/1e6:5.2f} MB  -> {d}")
+    total = sum(p.stat().st_size for d in (BASE, OUT)
+                for p in d.iterdir() if p.is_file())
+    print(f"\n  bundle total: {total/1e6:.2f} MB")
 
 
 if __name__ == "__main__":

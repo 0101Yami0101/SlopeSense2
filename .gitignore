@@ -13,6 +13,11 @@
 _netrc
 misc/
 
+# Investor / business material — confidential by nature, never belongs in a
+# repo that a free host is about to make (or that already is) public.
+docs/investor/
+docs/temp/
+
 # Data — 4+ GB, regenerable via scripts/fetch/
 data/raw/
 data/interim/

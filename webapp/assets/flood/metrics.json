@@ -1,0 +1,48 @@
+{
+  "grid": {
+    "height": 596,
+    "width": 1227
+  },
+  "channel_definition": {
+    "min_upstream_km2": 100.0,
+    "channel_cells_100m": 55572
+  },
+  "hand": {
+    "method": "nearest drainage in plan view",
+    "max_m_considered": 25.0,
+    "median_m_statewide": 748.5506591796875
+  },
+  "flood_prone": {
+    "cells_by_class": {
+      "0": 695574,
+      "1": 8997,
+      "2": 6045,
+      "3": 8320,
+      "4": 5790,
+      "5": 6566
+    },
+    "share_of_state_any_class": 1.0
+  },
+  "catchments": {
+    "n": 1680,
+    "level": 12,
+    "source": "HydroSHEDS HydroBASINS v1c"
+  },
+  "validation": {
+    "status": "NOT VALIDATED",
+    "reference": "Bhuvan aggregated flood extent 2003-2020 (rendered tiles)",
+    "why_rejected": "70.5% of the pixels the reference marks as flooded lie on slopes steeper than 15 degrees, and 31.3% on slopes steeper than 25 degrees. Water does not pond on a cliff, so those are tile smear rather than observation.",
+    "reference_flooded_cells": 287461,
+    "reference_on_slope_gt15": 0.7046590667951479,
+    "reference_on_slope_gt25": 0.3130824703177127,
+    "pixel_auc": 0.5302058646335904,
+    "catchment_spearman": -0.022993550549764666,
+    "catchment_n": 706,
+    "what_would_validate_it": [
+      "District inundation reports with dates and locations",
+      "Sentinel-1 water mapping for named flood events",
+      "River gauge stage records at known cross-sections"
+    ]
+  },
+  "state_cells": 8202343
+}

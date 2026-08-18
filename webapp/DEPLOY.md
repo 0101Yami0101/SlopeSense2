@@ -1,41 +1,80 @@
 # Putting the app online — free, about 10 minutes
 
-The app is self-contained. It reads a **0.45 MB** bundle in `assets/` and calls a
+The app is self-contained. It reads a **4.60 MB** bundle in `assets/` and calls a
 free weather service. No database, no API key, no paid tier.
+
+## How the app is laid out
+
+One deployment, several modules behind a landing page.
+
+```
+webapp/
+  app.py          the shell — landing page and router, no hazard logic
+  core/           the shared spine: grid, geography, maps, search, terrain, 3D
+  products/       one folder per module, plus the registry that lists them
+    landslide/      SlopeSense — live
+    flood/          FloodSense — live (static layer unvalidated)
+    backbone/       Data Backbone — catalogue + pipeline view
+  assets/
+    base/           shared geography + the rainfall spine     (2.07 MB)
+    landslide/      SlopeSense model output                   (1.59 MB)
+    flood/          FloodSense terrain layers + catchments    (0.78 MB)
+    backbone/       catalogue, statistics, previews           (0.17 MB)
+```
+
+`backbone/` summarises **8.06 GB** of licensed source data in 0.17 MB and
+deliberately contains none of it: histograms instead of cell values, previews
+at ~6 km per pixel, and synthetic demo rows. See
+`scripts/build/build_backbone_bundle.py` for the rule and how it is enforced.
+
+`base/` holds the rainfall query points and climatology as well as the
+geography: **both hazards are driven by the same rain**, so filing them under
+one module would make the other import from it. One cached fetch serves every
+module, so opening the second costs no extra API call.
+
+The entry point is still `webapp/app.py`, so nothing about deployment changes.
+Adding a module means a folder in `products/` and one line in
+`products/__init__.py` — the shell, sidebar and landing page all read that
+registry rather than naming modules themselves.
 
 ---
 
 ## Step 1 — put the code on GitHub
 
-The project is already committed locally. You need to create an empty repo on
-GitHub, then push:
+⚠️ **This is a separate deployment from the original SlopeSense app**
+(`0101Yami0101/SlopeSense`) — deliberately, so this platform gets its own new
+link rather than overwriting a working one. This codebase already lives in
+its own repo, `0101Yami0101/SlopeSense2` (public), with the remote already
+configured locally. Pushing today's changes is just:
 
 ```bash
 cd D:\CODE\BeeDigital\LandSlideFlood
-git branch -M main
-git remote add origin https://github.com/<your-username>/arunachal-landslide-forecast.git
-git push -u origin main
+git push
 ```
-
-Make the repo **public** — the free Streamlit tier requires it.
 
 ### ✅ Already checked for you
 
 - Credentials are excluded. `misc/PlatformPasswords.txt` and `.env` are ignored.
-  *(The original ignore rule named the wrong folder and would have committed the
-  password file — that is fixed.)*
-- Repo is **31 MB**. The 11 GB of raw data and 88 MB of GSI PDFs are excluded and
-  regenerable from `scripts/fetch/`.
+- Investor/business material (`docs/investor/`, `docs/temp/`) is excluded —
+  found sitting in the working tree while preparing this deploy, gitignored
+  before anything reached the public repo.
+- Repo is **~37.7 MB**. The 11+ GB of raw data and 88 MB of GSI PDFs are
+  excluded and regenerable from `scripts/fetch/`.
 
 ## Step 2 — deploy
 
 1. Go to **<https://share.streamlit.io>** and sign in with GitHub.
 2. **Create app → Deploy a public app from GitHub**.
 3. Fill in:
-   - **Repository:** `<your-username>/arunachal-landslide-forecast`
+   - **Repository:** `0101Yami0101/SlopeSense2`
    - **Branch:** `main`
    - **Main file path:** `webapp/app.py`
-4. Deploy.
+4. Open **Advanced settings** and set a custom app URL — pick something that
+   does **not** say "slopesense", since this platform is three modules now,
+   not one (e.g. `arunachal-hazard-platform`). Left on auto, Streamlit Cloud
+   names it after the repo (`slopesense2`) — already a different link from
+   the original app, just a less descriptive one to hand someone.
+5. Deploy.
 
 Build takes ~2 minutes — the dependency list is deliberately tiny (numpy, pandas,
 pillow, requests, streamlit). **No rasterio, geopandas or lightgbm**, which is
@@ -68,11 +107,19 @@ The deployed app never runs the pipeline. To refresh it:
 # refresh rainfall history (only needed occasionally)
 python scripts/fetch/fetch_20_openmeteo_climatology.py
 
-# rebuild the bundle
-python scripts/run/export_webapp_bundle.py
+# rebuild the bundles
+python scripts/run/export_webapp_bundle.py       # base/ + landslide/
+python scripts/build/build_flood_layers.py       # flood/
+python scripts/build/build_backbone_bundle.py    # backbone/ (run last —
+                                                 # it measures the others)
 
 git commit -am "Refresh app bundle" && git push     # auto-redeploys
 ```
+
+The flood builder needs `rasterio`, `geopandas`, `scipy` and `scikit-image`.
+Those are pipeline dependencies only — **the deployed app still installs just
+numpy, pandas, pillow, requests, streamlit, folium**, which is what keeps it
+inside the free tier.
 
 If the susceptibility model is retrained, re-run
 `scripts/model/predict_susceptibility.py` first.
@@ -92,8 +139,8 @@ streamlit run webapp/app.py
 
 | Constraint | This app |
 |---|---|
-| Repo size | 31 MB (data excluded) |
-| Bundle the app loads | **0.45 MB** |
+| Repo size | ~37.7 MB (data excluded) |
+| Bundle the app loads | **4.60 MB** (2.07 shared + 1.59 SlopeSense + 0.78 FloodSense + 0.17 Backbone) |
 | Memory | well under 1 GB — a few small arrays |
 | Build time | ~2 min, 5 slim dependencies |
 | API keys | none — Open-Meteo is keyless |
@@ -106,6 +153,8 @@ If this ever goes to a paying client, move to a paid tier — see
 [RAINFALL_RESOLUTION_LIMITS.md](../docs/design/RAINFALL_RESOLUTION_LIMITS.md),
 which also restores full 11 km rainfall detail.
 
-**The app says "not for operational safety decisions" and should keep saying it.**
+**This remains a research prototype, not an operational safety tool.**
 The score is a relative ranking, not a probability, and rainfall is sampled at
-~33 km.
+~33 km. That used to run as a standing caption on every screen; it was pulled
+out of the UI to declutter the product, and belongs in a proper limits
+write-up under docs/design/ instead of repeated chrome.
