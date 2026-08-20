@@ -478,3 +478,39 @@ of expensive builds**, and every claim validated against known answers before it
 is trusted. The system ships either way — the *where* half is strong, the *when*
 half is honest about what it is, and we can now say precisely what would improve
 it and why nothing cheaper will.
+
+## ⭐ Update 2026-08-20 — a sixth route, untested by any of the above
+
+All five closed attempts above are remote-sensing or inference routes over the
+existing spatial inventory. A different kind of route turned up while re-checking
+`bhusanket.gsi.gov.in`: the site hosts a **report bibliography**
+(`json/LandslideReport/LandslideReport.json`), 48 entries for Arunachal Pradesh,
+1950 → 2024-25, including **11 Post Disaster Studies** — GSI's own written
+investigations of specific events, several with an exact date already visible in
+the title (*"22nd and 23rd April 2016 Tawang Town"*, *"14th June 2008 landslides
+and flood related hazard studies of Itanagar"*, and others back to 1950). **46 of
+the 48 download directly as PDF, no login** — verified by testing every one.
+
+This is not a re-run of a closed route — GSI's *own field reports* were never one
+of the five tested.
+
+**Confirmed the same day, by reading, not just downloading.** 7 of the 46 have
+now been read end to end. One file alone (`PDLS_2024_50185.pdf`) bundles four
+fully-attributed 2024 events, each with a structured 42/43-point datasheet —
+exact date, time, coordinates, material, failure mechanism, triggering factor.
+Five more read from the pre-2016 narrative-style reports carry real dates back
+to 1948, including one internal inconsistency worth flagging: two separate GSI
+reports date the same 1989 debris avalanches nine days apart (9 May vs 15 June).
+
+**Still not a corrected number** — but now a bounded, measured one. A full
+automated scan (`scripts/proto/px2_gsi_report_archive.py`) downloaded and
+text-checked all 255 candidate reports across Arunachal and the wider
+Himalayan/NE arc's Post Disaster Studies. Result: **Arunachal alone,
+~25–40 new events (total ~100–110) — still short of enough for ML.** Pooled
+across all 11 states, **~200–280 new events** — a genuinely different scale,
+enough to seriously attempt a cross-validated tree-based model trained
+regionally and fine-tuned to Arunachal. This revives §6c below with a
+stronger source than the 617 season-tagged Bhuvan events it was parked on.
+
+Full detail: `docs/data_research/DATA_VERIFICATION.md` §D, `reports/px2_gsi_report_archive.json`,
+memory `gsi-report-archive-open`.

@@ -104,14 +104,132 @@ Recorded from a real sample: resolution · AOI coverage · date range · units �
 | Source | Tier | Status | Findings |
 |--------|------|--------|----------|
 | **HydroSHEDS** | 🟢 A | ✅ | **50,800 river reaches**, 93,388 km total. Basins L8 (348) and L12 (1,680). Carries `UPLAND_SKM` — see the flood-reach finding below |
+| **CWC FFS live gauge network** | 🟢 A | ✅ | **⭐ CRITICAL — see full writeup immediately below.** Real measured river level, 1971→today, for Arunachal's major gauged rivers. This was the top Level 2 ask; it turned out to be free |
+| **NWDP river discharge (small/medium rivers)** | 🟢 A | ✅ | **⭐ CRITICAL — see full writeup immediately below.** Real measured discharge, 14 small/medium AP rivers, 750k+ readings, downloadable, openly licensed. Fills the gap CWC FFS didn't |
 | Global Flood Database | 🟢 A → 🟡 B | ❌ | **Reclassify.** Site is a JS shell with no API; data is Google Earth Engine-only. The Dartmouth Flood Observatory archive it derives from returns **HTTP 410 Gone** — permanently removed |
 | USGS WaterWatch | 🟢 A | ➖ | US only — method reference, no data value here |
+
+> ## ⭐⭐⭐ CRITICAL — CWC FFS: real river gauge data, free, live. DO NOT MISS THIS WHEN BUILDING FLOOD. ⭐⭐⭐
+>
+> **Checked 2026-08-20.** `ffs.india-water.gov.in` — the Central Water Commission's own live flood forecasting site — runs on an **open REST API, no key, no login**, found by capturing the app's real network traffic with a headless browser (its own JS bundles don't reveal the API host — plain page-fetch or URL-guessing will not find this; see the method note in Section G's sibling entry below and in memory `cwc-ffs-live-river-gauge-data`).
+>
+> **What it gives us for Arunachal:**
+> - **17 stations formally tagged `meteorologicalSubDivision = "Arunachal Pradesh"`**, plus more physically inside the state under neighbouring subdivision tags. Covers the major named rivers at named towns (Passighat/Siang, Yingkiong, Tuting, Namsai, Seppa/Kameng, Daporijo/Subansiri, Bhalukpong, Kibithu, and others) — **not** the small hillside streams; same tier as GloFAS/large-river forecasting, but **measured, not modelled**.
+> - **Passighat (`005-UBDDIB`) alone has 93,145 real water-level readings, 1971-06-02 → today, still updating live.** Endpoint: `GET https://ffs.india-water.gov.in/iam/api/new-entry-data/specification/?specification={"where":{"expression":{"fieldName":"id.stationCode","operator":"eq","value":"005-UBDDIB"}},"and":{"expression":{"fieldName":"id.datatypeCode","operator":"eq","value":"HHS"}}}`
+> - **Official danger/warning levels per station** — e.g. Passighat: warning 152.96 m, danger 153.96 m, historic peak 157.54 m (2000-06-11). This is an **objective, government-defined threshold for turning the level series into dated flood/no-flood labels** — no modelling required. Endpoint: `/iam/api/flood-forecast-static/specification/?specification={"expression":{"fieldName":"stationCode","operator":"eq","value":"<code>"}}`
+> - **Official CWC forecast-vs-outcome records** at `/iam/api/new-forecasted-entry-data` — issued date, forecasted date, predicted value, trend. Inflow forecasts exist for at least Pare HEP and Subansiri Lower Dam (`FIN` datatype), current as of July 2026.
+> - **Caveat:** only the core water-level series (`HHS`) stays continuously live on the stations checked. Other datatypes on the same stations (`HHT`, `IPC`, `MPM`, `MPS`, etc. — mostly not rainfall) mostly stop around 2021. Check `new-entry-data-aggregate` per station before assuming a series is current.
+>
+> **This resolves the Level 2 flood ask below marked ✅ FREE.** It does **not** touch the small-stream gap — see Finding 1, still open.
+>
+> **Not yet done:** full inventory of every AP station's data depth and live datatypes; bulk-archiving the full history; checking whether `aff.india-water.gov.in` (the linked 5-day advisory site) exposes the same kind of open API.
+
+> ## ⭐⭐⭐ CRITICAL — NWDP: real discharge data for SMALL rivers, free, downloadable, verified. DO NOT MISS THIS WHEN BUILDING FLOOD. ⭐⭐⭐
+>
+> **Checked and download-verified 2026-08-20.** `nwdp.nwic.gov.in` — National Water Data Portal, run by NWIC (sister body to CWC) — is a standard CKAN open-data site (same software as data.gov.in), with a **documented, stable REST API**: `GET https://nwdp.nwic.gov.in/api/3/action/datastore_search?resource_id=<id>&limit=&offset=`. No key, no login. **Bulk CSV export confirmed working** at `https://nwdp.nwic.gov.in/datastore/dump/<resource_id>`. **License confirmed: `other-open`, published by CWC, notes explicitly say "for hydrological analysis, flood forecasting, and water resource management"** — we are clear to use this.
+>
+> **Dataset:** `river-discharge-telemetry-hourly-central-water-commission-cwc`, two Arunachal resources:
+> - `9c755c40-389e-4f5d-92c6-b936d28e51b3` — **521,703 rows**, real dates 2023 → Sept 2025 (labelled "1970-2025" but that's a generic template name, not literal — a few rows carry a garbage 2000-01-09 timestamp, ignore)
+> - `9a7feb81-191e-45df-b808-cd9523a97356` — **230,170 rows**, current telemetry, Jan 2026 onward
+>
+> **14 distinct stations, confirmed by a full scan (not sampling) — genuinely small/medium rivers across many districts, the tier CWC FFS's gauge network does NOT reach:**
+>
+> | Station | District | Historical rows |
+> |---|---|---:|
+> | Ziro | Lower Subansiri | 66,746 |
+> | Changlang | Changlang | 60,220 |
+> | Miao_2 | Changlang | 57,200 |
+> | Deomali_1 | Tirap | 55,645 |
+> | Basar_1 | Lepa-Rada | 46,315 |
+> | Tenga_1 | West Kameng | 43,143 |
+> | Sagalee_1 | Papum Pare | 40,792 |
+> | Kamlang_1 | Lohit | 38,467 |
+> | Changlang_1 | Changlang | 31,186 |
+> | Kanubari_1 | Longding | 30,661 |
+> | Tengapani Bridge_1 | Lohit | 17,075 |
+> | Darak(Kamba) | West Siang | 14,392 |
+> | Tissa Camp_1 | Tirap | 10,113 |
+> | Aalo_1 | West Siang | 9,748 |
+>
+> **Data is DISCHARGE (m³/sec), 15-minute intervals** — the actual physical quantity a hydrological model wants, more directly usable than water level alone. Aalo_1 reads ~3 m³/s — a genuinely small stream, confirming this is real small-catchment coverage, not another cut of the same major rivers.
+>
+> **Data-quality caveat, real:** at least 2 of the 14 stations have visibly wrong coordinates baked into the government's own data (`Changlang`'s listed lat/lon is actually in Kashmir; `Ziro`'s is actually in Uttarakhand). The `District` field is reliable; **do not trust `Latitude`/`Longitude` without cross-checking against the station name and district.**
+>
+> **Together with the FFS finding above, this substantially answers the Level 2 river-gauge ask for BOTH tiers** — major rivers (FFS) and small/medium rivers (NWDP). The remaining gap is coverage completeness (14 stations, not all catchments) and cross-referencing each station to its actual HydroBASINS catchment.
+>
+> **Not yet done:** downloading and archiving the full 750k+ rows; matching each of the 14 stations to a HydroSHEDS catchment; checking whether other states' resources on this portal share the schema (useful for pooled small-basin training later, see `himalayan-pooling-is-the-live-ml-route` memory); checking for a rainfall-equivalent dataset on the same portal.
 
 ## D. Training labels
 
 | Source | Tier | Status | Findings |
 |--------|------|--------|----------|
 | **NASA Global Landslide Catalog** | 🟢 A | ⚠️ | **All official NASA endpoints are dead** — Socrata 404, `maps.nccs.nasa.gov` refuses connections, viewer is a JS app. Retrieved via an **unofficial ArcGIS re-host** (provenance unverified). **99 events** in bbox, **72 inside the state**. Dates **2008 → 2018 — 8 years stale**. Location accuracy: exact 12, 1 km 16, 5 km 26, 10 km 16, 25 km 9, 50 km 13. **Only 28 events are precise enough for slope-scale training** |
+| **GSI report archive — statewiseLandslideReport** | 🟢 A | ⚠️ | **⭐ CRITICAL — see full writeup below.** 46 of 48 real Arunachal GSI investigation reports (1950→2024-25) download directly, no login. Several carry exact dates in the title. Unread — a lead, not yet a corrected label count |
+
+> ## ⭐⭐⭐ CRITICAL — GSI's own report archive is openly downloadable. A 6th route to dated events, unread. DO NOT MISS THIS. ⭐⭐⭐
+>
+> **Checked and download-verified 2026-08-20**, re-checking `bhusanket.gsi.gov.in` at the user's
+> prompt. Different feature from the broken map/search covered elsewhere in this doc — this is a
+> **report bibliography**: `bhusanket.gsi.gov.in/json/LandslideReport/LandslideReport.json`
+> (1,179 records nationally, plain static JSON, no auth) lists GSI's actual field investigation
+> reports — title, accession number, project type, field season.
+>
+> **48 records are Arunachal Pradesh, field seasons 1950 → 2024-2025.** Types: 18 Macro scale
+> studies, 3 Meso scale studies, 16 Site Specific Studies, **11 Post Disaster Studies**.
+>
+> **Confirmed actually downloadable, not just indexed.** PDF URL pattern (from the page's own
+> JS): `https://bhusanket.gsi.gov.in/Output/LandslideReport/<state>/<project type>/<accession
+> no>.pdf`. Tested all 48 — **46 return a real PDF (HTTP 200, 0.1–196.7 MB), only 2 give 403.**
+> No login anywhere in this path.
+>
+> **Why this matters:** Finding 6 below and `TEMPORAL_INVENTORY_ATTEMPTS.md` closed five routes
+> to more dated landslide events — all of them remote-sensing or inference routes (optical
+> dating, radar dating, ML-on-72-events, Bhuvan's `Year` field). **This is a sixth route those
+> analyses never tested: GSI's own written investigations**, several with an exact date already
+> visible in the title —
+> *"22nd and 23rd April 2016 Tawang Town"*, *"14th June 2008 landslides and flood related hazard
+> studies of Itanagar"* (also flood-relevant), *"Bhalukpong Landslide, Arunachal"* (2016-17), a
+> 2024 post-disaster study, and older ones back to a 1950 Minutang landslide report.
+>
+> **⭐ Update 2026-08-20, same day — CONFIRMED BY READING, not just downloading.** Read 7 of the
+> 46 Arunachal PDFs end to end. **Yes, they have exactly what was missing.** Best example:
+> `PDLS_2024_50185.pdf` alone bundles **four** fully-attributed events — Banderdewa, Nirjuli,
+> Chiputa (Papum Pare, all **18 June 2024**, exact times) and Abrali (Lower Dibang Valley, NH-313,
+> **24 April 2024**) — each with a **structured 42/43-point datasheet**: exact lat/lon, date+time,
+> material/movement/failure type, dimensions, triggering factor, deaths/damage. Since ~2016 this
+> structured format is standard; older reports are narrative but still carry real dates — 5 more
+> confirmed by reading: Bomdila (26–28 June 1973), Jamiri/Munna Camp debris avalanches (dated
+> **15 June 1989** in one GSI report, **9 May 1989** in another about the *same* event — a real
+> inconsistency in GSI's own archive, flag it rather than silently picking one), Minutang (8 Sept
+> 1948, 332 deaths), Bhalukpong (1 July 2016, 12:20pm).
+>
+> **⭐⭐ Update 2026-08-20, later the same day — FULL SCAN COMPLETE. Concrete numbers below.**
+> Downloaded and text-scanned all 255 targeted reports (Arunachal, every project type + the rest
+> of the Himalayan/NE arc's Post Disaster Studies — the highest-yield category). 243/255
+> succeeded (12 stuck behind a >60MB cap or a 403). Method + script:
+> `scripts/proto/px2_gsi_report_archive.py`. Raw results: `data/interim/gsi_reports/`. Full
+> numbers: `reports/px2_gsi_report_archive.json`.
+>
+> **Arunachal alone:** of the 27 reports that can hold a real event (Post Disaster + Site
+> Specific Studies — excludes pure susceptibility-mapping reports), 20 show a genuine date.
+> Calibrated against direct reading (one report matched exactly: 4 automated hits, 4 real
+> events), estimated **~25–40 new individual events → Arunachal total ~100–110** (was 72).
+> **Still not enough for a trustworthy ML trigger model** — same conclusion as at 72 events.
+>
+> **Pooled across the whole Himalayan/NE arc (Post Disaster Studies only, 11 states):** 215
+> reports, 209 downloaded, **156 show a genuine date** — Uttarakhand alone contributes 69.
+> Estimated **~200–280 new individual events, region-wide**. **This is a different regime** —
+> enough to seriously attempt a real, cross-validated tree-based model (not deep learning),
+> trained on the pool and fine-tuned to Arunachal. Revives
+> `docs/design/PARKED_HIMALAYAN_POOLED_TRIGGER.md` with a stronger, day-precision source than
+> the 617 season-tagged Bhuvan events it was built on.
+>
+> **Not yet a final count.** What's measured is *how many reports name a real date*, not the
+> exact event total — reports bundle a variable number of events. The honest next step is
+> reading all ~176 flagged reports one at a time and extracting each into a structured table;
+> `data/interim/gsi_reports/scan_results.json` is the exact queue (`has_date_signal: true`).
+>
+> Full detail: memory `gsi-report-archive-open`, `himalayan-pooling-is-the-live-ml-route`.
 
 ## E. Impact & exposure
 
@@ -131,6 +249,34 @@ Recorded from a real sample: resolution · AOI coverage · date range · units �
 | **NOAA CPC (ENSO/ONI)** | 🟢 A | ✅ | 917 seasons through **AMJ 2026** |
 
 > ⚠️ **A bbox is not a state.** OSM and WDPA were fetched on the AOI bounding box, which reaches deep into Assam. Before clipping: 107,302 roads and 585,320 buildings. After clipping to the state polygon: 14,943 and 17,719. **86% of roads and 97% of buildings were outside Arunachal.** Any figure quoted from a bbox pull will overstate coverage by an order of magnitude.
+
+## G. Land cover — recurring deep-learning feed (NESDR)
+
+*Checked 2026-08-20, not yet in the Scoreboard count above.*
+
+| Source | Tier | Status | Findings |
+|--------|------|--------|----------|
+| **NESDR / NESAC deep-learning LULC** | 🟡 B → 🔴 C | ⚠️ | Semi-annual cycles (Apr–Dec 2024, Jan–Jun 2025, Jul–Dec 2025). Latest cycle ships 7 separate classes: Forest, Grassland, Scrub Land, Agricultural Land, Built-up Area, Snow Cover, Waterbody. Sentinel-2 → automatic deep-learning classifier, NESAC's own stated accuracy **80–85%** from 6,000 sample points, explicitly **"post classification verification was not done on ground."** Full-resolution GeoTIFF download gated behind government registration (Safe Custody form) — 🔴 C. But the WMS map service underneath (`nesdr.gov.in/igistile/<workspace>/wms`) has an **open, unauthenticated GetCapabilities** — same trap as APSSDI/Bhuvan, 🟡 B in practice — not yet harvested end-to-end |
+
+**This is a feature layer, not a label source.** It answers "what covers this ground," never "a landslide/flood happened here on this date." It does not touch the landslide-timing gap (Finding 6) or the flood-reach gap (Finding 1) — it sits in the same category as ESA WorldCover / soil / lithology above: input to a model, not the training answer.
+
+**One genuine lead worth testing:** the Jul–Dec 2025 (monsoon-half) Waterbody layer against the water class in the drier Jan–Jun 2025 / Apr–Dec 2024 combined maps. If the classes line up cleanly, the wet-minus-dry difference is, in principle, an observed flood-season water-extent signal — free, dated, local — which is exactly what Finding 8's Bhuvan layer failed to be (70.5% of its "flooded" pixels sit on slopes >15°). Not yet checked whether it actually holds up.
+
+**Access trap for the record:** the dataset search UI (`/search/og_group_ref/…`) renders its results with JavaScript, invisible to a plain page-fetch — only visible with a real rendered browser (headless Chrome `--dump-dom` worked; no MCP browser tool is available in this environment). Individual `/dataset/…` slugs can hide a Unicode en-dash (`–`) where a normal hyphen looks right, silently 404ing a guessed URL.
+
+## H. SRSAC/APSAC follow-up — NWIA and SISDP-U, both actually tested
+
+*Checked and access-tested 2026-08-20 (`srsac.arunachal.gov.in/geospatial.php` and onward — see memory `srsac-site-map-and-nwia`). Mixed verdict; this time the "looks closed but isn't" pattern only partly held.*
+
+| Source | Tier | Status | Findings |
+|--------|------|--------|----------|
+| **NWIA wetland atlas** | 🟢 A | ⚠️ | National MoEFCC/SAC program, APSAC state partner. 1:25,000, IRS LISS-IV, classes include lakes/ponds/**glacial lakes**/reservoirs/waterlogged land, field-validated. **Tested: genuinely PDF-only** (`vedas.sac.gov.in`, state-wise reports, one national assessment PDF is 709 MB) — no live map/WFS/WMS behind this specific product. Real, flood-relevant content (frames wetlands as flood buffers; glacial-lake class matters for GLOF risk, see `PILOT_TAWANG.md`), just not queryable data |
+| **VEDAS Wetland Information System** (bonus find) | 🟢 A | ⚠️ | Different, live system on the same domain (`vedas.sac.gov.in/vapps/wetlandinfo/`). Serves recent wetland/water-extent rasters (data as current as 2026-07-08) over an **open WMS, no login hit** (`ridam_server2/wms`), plus a REST catalogue (`geoentity-services/api/...`) of 56 dataset types incl. gauge stations and basin boundaries. **Arunachal-specific granularity not yet confirmed** — flagged, not relied on |
+| **SISDP-U** (2.5 m LULC/drainage/infrastructure/settlement, 1:10,000) | 🔴 C | ❌ | **Tested: the official bulk-download page genuinely requires login** — it's a bare iframe to `login.php`, not a UI that merely looks gated. This one really is closed without an account. Bhuvan generally allows free individual/organisation registration for many thematic downloads — worth trying that before treating it as a hard wall |
+
+**SISDP-U practical workaround already in hand:** NESDR's own open WMS (Section G) already serves `SISDP_Update_Arunachal_Drainage/Road/Settlement` and `arlulcsisdpv2` layers — very likely the same underlying program's output, reachable through a route already cracked, without needing the Bhuvan login.
+
+**What the finer SISDP-U resolution (2.5 m vs the 10 m ESA WorldCover we use) would actually buy us, if obtained:** marginal for hazard *prediction* — the terrain (DEM) is still 30 m, so sharper land cover alone doesn't raise susceptibility-model precision much; the terrain stays the bottleneck. The real value is in **exposure/impact mapping** (a much finer settlement layer than OSM's sparse building coverage, see Section E) and **refining the small-stream channel network** for the flood static layer. Not a hazard-prediction upgrade — an exposure/terrain-detail upgrade.
 
 ---
 
@@ -180,6 +326,10 @@ Two consequences worth designing for:
 | > 10,000 km² | 1,234 | 2.4% | 2,129 km |
 
 Large-river forecasting needs drainage areas in the thousands of km². **97% of Arunachal's stream network sits below that threshold.** This is the quantified case for the Level 2 flood build — it is not a refinement, it is the difference between covering 3% and covering the state.
+
+> **Update 2026-08-20:** the 3% that *is* reachable just got a lot better — see Finding 11. CWC's own gauge network gives **real measured** river level on that tier instead of GloFAS's modelled estimate.
+>
+> **Update 2026-08-20, later the same day:** the 97% gap is no longer completely untouched either — see Finding 12. NWDP has real discharge data for 14 small/medium rivers across many districts. Not full coverage of the network, but the first real evidence found on this tier at all.
 
 ### 2. Landslide labels: RESOLVED — 28 → ~36,000, free
 
@@ -242,6 +392,8 @@ It returns **2 records publicly** — one genuine (Valparai TN, 2024-07-30 03:00
 
 Per-event *measured* rainfall amount, duration and intensity is the prize here — it cannot be reconstructed from IMERG, which averages over 10 km in terrain with 3,000 m of relief.
 
+> **Update 2026-08-20:** don't treat `Landslidedata_1` as the only path to more dates any more — see the critical callout above Section E. GSI's own report archive (46 downloadable PDFs, several with exact incident dates in the title) is a free, no-ask alternative route, unread but real.
+
 ### 7. What we already hold on *how* landslides occur
 
 The 1,322 GSI points are richly attributed even without dates:
@@ -265,6 +417,18 @@ Rainfall as the dominant trigger is now established **from the data**, not from 
 ### 9. Multi-state training data available (not yet fetched)
 
 Bhuvan's `disaster` workspace carries season-tagged landslide layers for ~15 states — the ~80,000 landslides NRSC mapped nationally. The rainfall→failure relationship can be trained across the Himalayan arc and fine-tuned to Arunachal, which sidesteps the local timing gap. **Not yet verified** that other states share Arunachal's schema.
+
+### 12. ⭐ NWDP: real discharge data for small rivers, free, verified downloadable
+
+Full detail in the callout in Section C. Short version: `nwdp.nwic.gov.in` (NWIC, standard CKAN open-data platform) has **750k+ real discharge readings across 14 small/medium Arunachal rivers** — Ziro, Changlang, Miao, Deomali, Basar, Tenga, Sagalee, Kamlang, Kanubari, Tengapani, Darak, Tissa Camp, Aalo — spanning many districts, not just the major trunk rivers. License is `other-open`, published by CWC explicitly for flood forecasting use, and bulk CSV download is confirmed working. This is the first real evidence found on the small-stream tier at all (Finding 1's 97% gap). Coordinates on 2 of the 14 stations are wrong in the source data — verify by name/district, not lat/lon.
+
+### 11. ⭐ CWC FFS: the real river gauge data, free — the top flood ask, resolved
+
+Full detail in the callout in Section C. Short version: `ffs.india-water.gov.in` runs an open API with **55 years of real measured water level** for Arunachal's major gauged rivers (Passighat/Siang alone: 93,145 readings, 1971→today, still live), plus official danger/warning thresholds per station and CWC's own past forecast records to check against. This was expected to require a formal state/CWC request; it did not. **Still only covers the same gauged-major-river tier as Finding 1** — it upgrades that tier from modelled to measured, it does not reach the small-stream 97%.
+
+### 10. NESDR: a recurring land-cover feed, not a label source — with one lead worth testing
+
+NESAC's `nesdr.gov.in` runs Sentinel-2 through a deep-learning classifier for the whole Northeast every ~6 months (Section G). It is real satellite imagery, automatically sorted into land types — not invented data — but NESAC's own listing says ground verification was never done, so treat the 80–85% accuracy as self-reported. It answers "what's on the ground," not "when did a hazard occur," so it does not fill the landslide-timing gap or the flood-reach gap. The one thing worth chasing: its Waterbody layer for the monsoon half of 2025 against the drier halves before it, as a candidate flood-season proxy — see Section G for why.
 
 ### 5. Exposure layers cannot yet support an impact product
 
@@ -294,11 +458,12 @@ Bhuvan's `disaster` workspace carries season-tagged landslide layers for ~15 sta
 ### Improves flood prediction
 | Data | Ask who | Status | Notes |
 |------|---------|--------|-------|
-| **River gauge (level & flow)** | Client dept, CWC | ⬜ | **Now quantified: unlocks the 97% of reaches below forecast threshold** |
-| **River cross-section / bathymetry** | CWC, State Water Resources | ⬜ | Required for depth & extent |
-| **Dam / reservoir release schedule** | NHPC and other operators, CWC | ⬜ | |
-| Embankments & hydraulic structures | Water Resources | ⬜ | |
-| Historical flood levels | CWC, SDMA | ⬜ | More important now that Global Flood Database is blocked |
+| ~~River gauge (level & flow)~~ | Client dept, CWC | ✅ **FREE** | **⭐ Obtained without asking — CWC's own FFS site exposes an open API with 55 years of real level data for Arunachal's gauged rivers.** See the critical callout in Section C above. No longer an ask — for the *gauged* rivers only |
+| **River cross-section / bathymetry** | CWC, State Water Resources | ⬜ | **Now the top ask.** Turns "the level is high" into an actual depth/extent map — the gauges alone can't do this |
+| **Dam / reservoir release schedule** | NHPC and other operators, CWC | ⬜ | The gauge network shows water flowing *in* to dams (inflow forecasts), not what operators release downstream |
+| ~~Small-stream gauges~~ | Hydropower operators' own monitoring, State Water Resources | ✅ **FREE** | **⭐ Obtained without asking — NWDP has real discharge data for 14 small/medium rivers.** See the critical callout in Section C. Still only 14 stations, not every catchment — more coverage remains a live ask if this proves valuable |
+| Embankments & hydraulic structures | Water Resources | ⬜ | Changes where water goes once a river tops its banks |
+| Historical flood levels | CWC, SDMA | ⬜ | Partly superseded — the gauge history itself now carries each station's historic peak level and date |
 
 ### Improves impact & response
 | Data | Ask who | Status | Notes |
@@ -339,6 +504,9 @@ All 🔴 C, vendor quotes only, none requested. See `Appendix.md`.
 | Protected Planet gives protected areas | Zero coverage for Arunachal | Reassign to State Forest Dept |
 | `api.weather.gov`, WaterWatch listed without caveat | Both US-only | Mark not applicable |
 | Level 2 flood is an upgrade | It is the difference between 3% and full coverage | Already corrected in `Base.md`; now quantified |
+| NESDR's "deep learning" datasets might be landslide/flood event labels | They're recurring land-cover classification (forest/water/etc.), self-described as unverified on the ground | Treat as a feature layer, not a label source — see Section G |
+| River gauge data requires a formal CWC/state ask, expect a long wait | CWC's own `ffs.india-water.gov.in` exposes an open API with 55 years of real level data for Arunachal's gauged rivers, no request needed | **Removed from ASK.** See the critical callout in Section C and Finding 11 |
+| Small-stream gauge data does not exist anywhere free (Finding 1's 97% gap is a hard wall) | NWIC's `nwdp.nwic.gov.in` has real, licensed, downloadable discharge data for 14 small/medium AP rivers | **Removed from ASK for these 14 catchments.** See the critical callout in Section C and Finding 12. Not full network coverage — more stations would still be a live ask |
 
 ---
 
@@ -356,6 +524,11 @@ All 🔴 C, vendor quotes only, none requested. See `Appendix.md`.
 6. **Build the Sentinel dating pipeline** — the highest-value free work available. Change detection over the ~36,000 known polygons converts a spatial inventory into a dated event catalogue at 1–2 week precision, which is enough to attribute events to specific monsoon storms in IMERG. Removes the dependency on the GSI ask and keeps generating new dated events every season after handover.
 7. **Fetch the multi-state Bhuvan layers** — ~80,000 season-tagged landslides nationally for training the rainfall→failure relationship. Verify schema parity with Arunachal first.
 8. **Remaining Tier B** (secondary, none blocking): MODIS, GLDAS, MERRA-2, ESA CCI soil moisture, NASA ARIA, Global Flood Database via Earth Engine.
+9. **Harvest the NESDR WMS and test the Waterbody wet-vs-dry comparison** — the open `igistile` service (Section G) has not been pulled end to end. If the monsoon-half Waterbody layer and the drier halves' water class line up, it's the first candidate flood-season ground truth since Bhuvan's layer was rejected (Finding 8).
+10. **⭐ Archive the full CWC FFS gauge history for every Arunachal station** — highest priority flood work now available. Inventory every AP-tagged/AP-located station, confirm its live datatype(s) and data depth, pull full history, and derive dated flood/no-flood labels from each station's danger/warning thresholds (Finding 11, Section C). This is what unblocks training a real rain→river-rise model on Arunachal's own gauged rivers.
+11. **⭐ Archive the full NWDP discharge history for all 14 small/medium-river stations** — same priority as #10, for the other tier. Bulk-download both Arunachal resources (Finding 12, Section C), fix the 2 known bad coordinates by cross-checking district/name, and match each station to its HydroSHEDS catchment so the discharge series can be paired with the rainfall already held for that basin.
+12. **⭐ Read the GSI Post Disaster Studies reports first** — highest-priority landslide work now available. 11 short reports, real dates likely inside; start there before the larger Site Specific / Macro scale PDFs. This is what would actually move the "90 dated events" number, if it moves at all — don't claim a new count until they're read (Section D critical callout).
+13. **⚠️ DO NOT mark SISDP-U closed without trying registration first.** Section H found the official bulk-download page (`bhuvan-app1.nrsc.gov.in/thematic/thematic/index.php?theme1=sisdpPh2&tab1=GetData`) genuinely login-gated — unlike most other "closed" portals in this doc, that was not a false negative. But Bhuvan generally offers **free individual/organisation registration** for its thematic downloads; that has not been tried. Low priority (Section H explains why — exposure/drainage detail, not a hazard-prediction upgrade) but **register and check what's behind the login before writing this off as a paid-tier item.** NESDR's WMS (Section G) already gives a likely-equivalent workaround in the meantime.
 
 ## What changed after Tier B
 

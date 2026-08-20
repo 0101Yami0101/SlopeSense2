@@ -4,6 +4,25 @@
 > Built 2026-08-17. Pipeline: `scripts/build/build_flood_layers.py`.
 > App: `webapp/products/flood/`. Bundle: `webapp/assets/flood/` (0.78 MB).
 
+> ## ⭐⭐⭐ CRITICAL — read before touching flood again: real river gauge data exists, free, BOTH tiers
+>
+> **2026-08-20.** Two government sources, verified and download-confirmed, between them cover the
+> major rivers AND a real sample of small/medium rivers:
+>
+> - `ffs.india-water.gov.in` (CWC's own live flood site) — open API, no login — **55 years of real
+>   measured river level** for Arunachal's major gauged rivers (Passighat/Siang etc.), still
+>   updating today, plus official danger/warning thresholds per station.
+> - `nwdp.nwic.gov.in` (NWIC's open data portal) — documented, standard API, download verified,
+>   openly licensed for flood-forecasting use — **750k+ real discharge readings across 14
+>   small/medium rivers** (Ziro, Tenga, Sagalee, Kamlang, Deomali, and 9 others) spanning many
+>   districts, not just the trunk rivers.
+>
+> This was the single biggest gap this whole document is built around ("Validation — the honest
+> part," below). **It is very likely no longer true that we have zero local evidence — on either
+> tier.** Full detail: `docs/data_research/DATA_VERIFICATION.md`, Section C, Findings 11 and 12.
+> Memory: `cwc-ffs-live-river-gauge-data`, `nwdp-small-stream-discharge-data`. **Do not re-derive
+> this from scratch — read those first.**
+
 ## The shape
 
 Identical to SlopeSense, because the physics splits the same way:
@@ -150,6 +169,27 @@ locations; Sentinel-1 water mapping for named events; river gauge stage records.
 
 1. **GloFAS reanalysis archive** → discharge anomaly on the five large rivers,
    turning the "large river" tier from catchment-rain into real river forecast
-2. **River gauges** (the one genuine ask of the state) → 6–24 h forecast on
-   gauged basins
-3. Any dated, located flood observation at all → the first real validation
+2. ~~River gauges (the one genuine ask of the state)~~ → **⭐ found free, not asked for.**
+   CWC's `ffs.india-water.gov.in` has 55 years of real level data for Arunachal's
+   gauged rivers (Passighat/Siang: 93,145 readings, 1971→today, still live), plus
+   official danger/warning thresholds per station. See the callout above. This is
+   now a **build task** (archive it, derive labels, train on it), not an ask.
+3. ~~Any dated, located flood observation at all~~ → **the CWC gauge history *is*
+   this**, for the gauged rivers: crossing a station's warning/danger level on a
+   given date is an objective, government-defined flood/no-flood label. NWDP's
+   discharge series (item 4) gives the same kind of raw material for 14 small/
+   medium rivers, though without a published danger threshold to define "flood"
+   from — that would need to be estimated from the series itself (e.g. a high
+   percentile of that station's own history).
+4. **⭐ NWDP small-river discharge (new, 2026-08-20)** — 750k+ readings, 14
+   stations, real small/medium rivers across many districts. See the callout
+   above. Still only 14 stations, not the whole network — genuinely new ground
+   truth, not full coverage.
+4. **NESDR's Waterbody layer, wet-half vs dry-half** — NESAC runs a deep-learning
+   land-cover classifier over Arunachal every ~6 months, and the Jul–Dec 2025
+   cycle ships a dedicated Waterbody class alongside the drier Jan–Jun 2025 and
+   Apr–Dec 2024 combined maps. Comparing them is a candidate for real, dated,
+   local flood-season evidence — the first one since the Bhuvan layer above was
+   rejected. It is a feature layer NESAC itself never ground-verified, not a
+   flood record, so this is a lead to test, not a result to cite. Access route
+   and caveats logged in `docs/data_research/DATA_VERIFICATION.md` §G.
